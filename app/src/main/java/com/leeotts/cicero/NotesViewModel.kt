@@ -34,6 +34,24 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
 
     private var lastDeleted: Note? = null
 
+    fun add(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            repository.addNote(trimmed, now = System.currentTimeMillis())
+        }
+    }
+
+    /**
+     * Edits the text only. A reminder keeps its alarm, because the PendingIntent
+     * request code is derived from the note id, which does not change here.
+     */
+    fun edit(note: Note, text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || trimmed == note.text) return
+        viewModelScope.launch { repository.updateNote(note.id, trimmed) }
+    }
+
     fun setDone(note: Note, done: Boolean) {
         viewModelScope.launch {
             repository.setNoteDone(note.id, done)

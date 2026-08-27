@@ -45,10 +45,16 @@
 
     <!-- notes -->
     <string name="notes_empty_title">Nothing noted</string>
-    <string name="notes_empty_body">Ask Cicero to remember something, or to remind you later, and it will show up here.</string>
+    <string name="notes_empty_body">Ask Cicero to remember something, or to remind you later. You can also add one yourself.</string>
     <string name="notes_deleted">Note deleted</string>
     <string name="notes_delete">Delete note</string>
+    <string name="notes_add">Add a note</string>
+    <string name="notes_new_title">New note</string>
+    <string name="notes_edit_title">Edit note</string>
+    <string name="notes_hint">What should Cicero remember?</string>
     <string name="action_undo">Undo</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
     <string name="a11y_reminder">Reminder</string>
 
     <!-- glasses -->
@@ -58,6 +64,20 @@
     <string name="glasses_camera_granted">Camera granted</string>
     <string name="glasses_grant_camera">Grant camera access</string>
     <string name="glasses_enable_mock">Enable mock glasses (emulator)</string>
+    <string name="glasses_disable_mock">Disable mock glasses</string>
+    <string name="glasses_mock_disabled">Mock glasses disabled</string>
+    <string name="glasses_mic_probe">Run microphone probe</string>
+    <string name="glasses_mic_probing">Recording\u2026</string>
+    <string name="glasses_mic_probe_hint">Records five seconds from the glasses microphone at 16 kHz, then at 8 kHz, to find out which rate Bluetooth HFP actually negotiates. That answer decides which wake-word engine can work. Needs real glasses \u2014 the emulator does not simulate Bluetooth audio.</string>
+    <string name="glasses_mic_result">%1$d Hz \u00b7 %2$d bytes \u00b7 peak %3$d \u00b7 %4$s</string>
+    <string name="glasses_mic_routed">Bluetooth</string>
+    <string name="glasses_mic_not_routed">NOT Bluetooth</string>
+    <string name="glasses_mic_none">Nothing was recorded. The glasses are probably not connected for voice.</string>
+    <string name="glasses_mic_share">Share recordings</string>
+    <string name="glasses_mic_share_title">Microphone probe recordings</string>
+    <string name="perm_microphone_title">Microphone</string>
+    <string name="perm_microphone_body">Needed to record from the glasses microphone. Nothing is recorded until you press the probe button.</string>
+    <string name="perm_microphone_action">Allow microphone</string>
     <string name="glasses_capturing">Capturing\u2026</string>
     <string name="glasses_take_photo">Take photo</string>
     <string name="glasses_permission_failed">Permission failed: %1$s</string>

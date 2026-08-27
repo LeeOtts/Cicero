@@ -37,6 +37,7 @@ import com.leeotts.cicero.ui.theme.TechnicalStyle
 import com.leeotts.cicero.util.findActivity
 import com.leeotts.cicero.util.isGranted
 import com.leeotts.cicero.util.openAppDetailsSettings
+import com.leeotts.cicero.util.shareFiles
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.types.Permission
 
@@ -51,6 +52,9 @@ fun GlassesScreen(
     val status by viewModel.status.collectAsStateWithLifecycle()
     val photo by viewModel.photo.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
+    val mockEnabled by viewModel.mockEnabled.collectAsStateWithLifecycle()
+    val probing by viewModel.probing.collectAsStateWithLifecycle()
+    val micProbe by viewModel.micProbe.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -67,6 +71,13 @@ fun GlassesScreen(
         asked = true
         bluetoothGranted.value = granted
     }
+
+    val micGranted = rememberSystemFlag {
+        context.isGranted(Manifest.permission.RECORD_AUDIO)
+    }
+    val micLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> micGranted.value = granted }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         Wearables.RequestPermissionContract(),
@@ -145,9 +156,17 @@ fun GlassesScreen(
 
         // Emulator path: fakes registration + permissions, no Meta AI app needed.
         OutlinedButton(
-            onClick = { viewModel.enableMock(context) },
+            onClick = {
+                if (mockEnabled) viewModel.disableMock(context) else viewModel.enableMock(context)
+            },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text(stringResource(R.string.glasses_enable_mock)) }
+        ) {
+            Text(
+                stringResource(
+                    if (mockEnabled) R.string.glasses_disable_mock else R.string.glasses_enable_mock,
+                ),
+            )
+        }
 
         Button(
             onClick = viewModel::capture,
@@ -168,6 +187,81 @@ fun GlassesScreen(
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+
+        PermissionCard(
+            title = stringResource(R.string.perm_microphone_title),
+            body = stringResource(R.string.perm_microphone_body),
+            granted = micGranted.value,
+            actionLabel = stringResource(R.string.perm_microphone_action),
+            onAction = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+        )
+
+        if (micGranted.value) {
+            Button(
+                onClick = viewModel::probeMic,
+                enabled = !probing,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    stringResource(
+                        if (probing) R.string.glasses_mic_probing else R.string.glasses_mic_probe,
+                    ),
+                )
+            }
+
+            Text(
+                text = stringResource(R.string.glasses_mic_probe_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            micProbe?.let { results ->
+                SectionCard {
+                    if (results.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.glasses_mic_none),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } else {
+                        results.forEach { result ->
+                            Text(
+                                text = stringResource(
+                                    R.string.glasses_mic_result,
+                                    result.sampleRate,
+                                    result.bytesRecorded,
+                                    result.peakAmplitude,
+                                    stringResource(
+                                        if (result.routedToBluetooth) {
+                                            R.string.glasses_mic_routed
+                                        } else {
+                                            R.string.glasses_mic_not_routed
+                                        },
+                                    ),
+                                ),
+                                style = TechnicalStyle,
+                            )
+                        }
+                    }
+                }
+
+                if (results.isNotEmpty()) {
+                    // A peak amplitude alone cannot tell you whether the top half
+                    // of the spectrum is empty; the WAVs have to be listened to.
+                    OutlinedButton(
+                        onClick = {
+                            context.shareFiles(
+                                files = results.map { it.file },
+                                mimeType = "audio/wav",
+                                chooserTitle = context.getString(
+                                    R.string.glasses_mic_share_title,
+                                ),
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.glasses_mic_share)) }
+                }
+            }
         }
     }
 }

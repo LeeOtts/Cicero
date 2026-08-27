@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.leeotts.cicero.audio.ScoProbe
 import com.leeotts.cicero.glasses.GlassesController
 import com.leeotts.cicero.glasses.MockGlassesSupport
 import com.meta.wearable.dat.core.Wearables
@@ -47,6 +48,16 @@ class GlassesViewModel(app: Application) : AndroidViewModel(app) {
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
+    private val _mockEnabled = MutableStateFlow(false)
+    val mockEnabled: StateFlow<Boolean> = _mockEnabled.asStateFlow()
+
+    private val _probing = MutableStateFlow(false)
+    val probing: StateFlow<Boolean> = _probing.asStateFlow()
+
+    /** Null until the probe has been run at least once this session. */
+    private val _micProbe = MutableStateFlow<List<ScoProbe.Result>?>(null)
+    val micProbe: StateFlow<List<ScoProbe.Result>?> = _micProbe.asStateFlow()
+
     fun onCameraPermission(status: PermissionStatus) {
         _cameraGranted.value = status == PermissionStatus.Granted
     }
@@ -58,6 +69,33 @@ class GlassesViewModel(app: Application) : AndroidViewModel(app) {
 
     fun enableMock(context: Context) {
         _status.value = MockGlassesSupport.enable(context)
+        _mockEnabled.value = true
+    }
+
+    fun disableMock(context: Context) {
+        MockGlassesSupport.disable(context)
+        _mockEnabled.value = false
+        _status.value = getApplication<Application>().getString(R.string.glasses_mock_disabled)
+    }
+
+    /**
+     * The Phase 2 spike, on a button: what sample rate does the glasses
+     * microphone actually deliver over Bluetooth HFP? 8 kHz narrowband and
+     * 16 kHz wideband call for different wake-word engines, and the docs only
+     * promise the former. Real glasses only - MockDeviceKit does not simulate
+     * Bluetooth audio.
+     */
+    fun probeMic() {
+        if (_probing.value) return
+        viewModelScope.launch {
+            _probing.value = true
+            _micProbe.value = null
+            try {
+                _micProbe.value = ScoProbe(getApplication()).probe()
+            } finally {
+                _probing.value = false
+            }
+        }
     }
 
     fun capture() {

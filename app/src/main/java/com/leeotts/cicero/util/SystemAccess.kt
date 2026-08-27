@@ -9,7 +9,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.leeotts.cicero.tools.CiceroNotificationListener
+import java.io.File
 
 /**
  * Unwraps the Activity behind a Compose LocalContext.
@@ -55,6 +57,28 @@ fun Context.openNotificationAccessSettings() {
         startActivity(
             Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+}
+
+/**
+ * Hands files to whatever app can take them, through the app's own FileProvider.
+ * Anything shared this way must be covered by res/xml/file_paths.xml, or
+ * getUriForFile throws.
+ */
+fun Context.shareFiles(files: List<File>, mimeType: String, chooserTitle: String) {
+    val existing = files.filter { it.exists() }
+    if (existing.isEmpty()) return
+    runCatching {
+        val uris = ArrayList(
+            existing.map { FileProvider.getUriForFile(this, "$packageName.fileprovider", it) }
+        )
+        val send = Intent(Intent.ACTION_SEND_MULTIPLE)
+            .setType(mimeType)
+            .putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        startActivity(
+            Intent.createChooser(send, chooserTitle).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }
 }

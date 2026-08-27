@@ -109,6 +109,8 @@ class ConversationRepository(context: Context) {
     suspend fun addNote(text: String, remindAt: Long? = null, now: Long): Long =
         dao.insertNote(Note(text = text, createdAt = now, remindAt = remindAt))
 
+    suspend fun updateNote(id: Long, text: String) = dao.updateNoteText(id, text)
+
     suspend fun setNoteDone(id: Long, done: Boolean) = dao.setNoteDone(id, done)
 
     suspend fun deleteNote(id: Long) = dao.deleteNote(id)

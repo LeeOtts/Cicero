@@ -87,6 +87,9 @@ interface CiceroDao {
     @Query("SELECT * FROM notes WHERE text LIKE '%' || :query || '%' ORDER BY createdAt DESC LIMIT :limit")
     suspend fun searchNotes(query: String, limit: Int = 20): List<Note>
 
+    @Query("UPDATE notes SET text = :text WHERE id = :id")
+    suspend fun updateNoteText(id: Long, text: String)
+
     @Query("UPDATE notes SET done = :done WHERE id = :id")
     suspend fun setNoteDone(id: Long, done: Boolean)
 

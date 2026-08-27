@@ -2,4 +2,6 @@
 <paths>
     <cache-path name="captures" path="captures/" />
     <files-path name="recordings" path="recordings/" />
+    <!-- Where ScoProbe writes its WAVs, so they can be shared off the device. -->
+    <external-files-path name="probes" path="." />
 </paths>
