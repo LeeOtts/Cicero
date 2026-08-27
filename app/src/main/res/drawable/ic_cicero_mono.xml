@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- the C -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M68.91,32.70 A26,26 0 1 0 68.91,75.30 L70.04,67.38 A18,18 0 1 1 70.04,40.62 Z" />
+
+    <!-- hairlines from each terminal to the far node -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:pathData="M69.48,36.66 L83.5,54" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:pathData="M69.48,71.34 L83.5,54" />
+
+    <!-- nodes, drawn over the hairlines -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M73.89,45.33 A2.6,2.6 0 1 0 79.09,45.33 A2.6,2.6 0 1 0 73.89,45.33 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M73.89,62.67 A2.6,2.6 0 1 0 79.09,62.67 A2.6,2.6 0 1 0 73.89,62.67 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M80.1,54 A3.4,3.4 0 1 0 86.9,54 A3.4,3.4 0 1 0 80.1,54 Z" />
+</vector>

@@ -1,0 +1,19 @@
+<resources>
+    <style name="Theme.Cicero" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+
+    <!-- Branded cold start: the mark on Imperial Purple. Also the hook the
+         theme-mode work uses if it ever needs to hold the frame. -->
+    <style name="Theme.Cicero.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/brand_purple</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_cicero_mono</item>
+        <item name="postSplashScreenTheme">@style/Theme.Cicero</item>
+    </style>
+</resources>

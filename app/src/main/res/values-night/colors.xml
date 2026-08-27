@@ -1,0 +1,4 @@
+<resources>
+    <!-- Matches CiceroDark.background in ui/theme/Color.kt. -->
+    <color name="window_background">#FF121016</color>
+</resources>

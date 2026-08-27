@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      Debug-only. MockDeviceKit's setCameraFeed(CameraFacing) opens the local
+      device camera to synthesise a glasses feed on an emulator. The real glasses
+      path never touches the phone camera, so this stays out of release builds.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Local LLM servers (LM Studio, Ollama) speak plain http over the tailnet.
+         Debug-only so release builds keep cleartext blocked. -->
+    <application
+        android:usesCleartextTraffic="true"
+        tools:targetApi="28" />
+</manifest>

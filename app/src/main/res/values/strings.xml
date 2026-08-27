@@ -1,0 +1,116 @@
+<resources>
+    <string name="app_name">Cicero</string>
+    <string name="wordmark" translatable="false">CICERO</string>
+
+    <!-- navigation -->
+    <string name="nav_ask">Ask</string>
+    <string name="nav_history">History</string>
+    <string name="nav_notes">Notes</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_glasses">Glasses</string>
+    <string name="nav_recent">Recent</string>
+    <string name="title_conversation">Conversation</string>
+    <string name="untitled_conversation">Untitled</string>
+    <string name="a11y_open_menu">Open navigation menu</string>
+    <string name="a11y_back">Back</string>
+
+    <!-- ask -->
+    <string name="ask_empty_title">Ask Cicero</string>
+    <string name="ask_empty_body">Questions you ask here go to %1$s. It can look through the glasses, take notes and set reminders.</string>
+    <string name="ask_placeholder">Ask something</string>
+    <string name="ask_send">Ask</string>
+    <string name="ask_new_thread">New thread</string>
+    <string name="ask_thinking">Thinking\u2026</string>
+
+    <!-- which backend is answering -->
+    <string name="brain_gemini">Gemini</string>
+    <string name="brain_local">Local</string>
+    <string name="brain_claude">Claude</string>
+    <string name="backend_with_model">%1$s (%2$s)</string>
+    <string name="backend_no_model">no model set</string>
+
+    <!-- history and thread -->
+    <string name="history_empty_title">Nothing yet</string>
+    <string name="history_empty_body">Conversations you have with Cicero will collect here.</string>
+    <!-- SimpleDateFormat patterns: reorder for the locale, keep the pattern letters. -->
+    <string name="format_date_time">d MMM, HH:mm</string>
+    <string name="format_time">HH:mm</string>
+    <string name="meta_pair">%1$s \u00b7 %2$s</string>
+    <string name="thread_empty_title">Empty thread</string>
+    <string name="thread_empty_body">This conversation has no turns saved against it.</string>
+    <string name="role_user">You</string>
+    <string name="role_assistant">Assistant</string>
+    <string name="role_tool">Tool</string>
+    <string name="a11y_captured_photo">Captured photo</string>
+
+    <!-- notes -->
+    <string name="notes_empty_title">Nothing noted</string>
+    <string name="notes_empty_body">Ask Cicero to remember something, or to remind you later, and it will show up here.</string>
+    <string name="notes_deleted">Note deleted</string>
+    <string name="notes_delete">Delete note</string>
+    <string name="action_undo">Undo</string>
+    <string name="a11y_reminder">Reminder</string>
+
+    <!-- glasses -->
+    <string name="glasses_registration">Registration: %1$s</string>
+    <string name="glasses_registration_unknown">unknown</string>
+    <string name="glasses_connect">Connect to Meta AI</string>
+    <string name="glasses_camera_granted">Camera granted</string>
+    <string name="glasses_grant_camera">Grant camera access</string>
+    <string name="glasses_enable_mock">Enable mock glasses (emulator)</string>
+    <string name="glasses_capturing">Capturing\u2026</string>
+    <string name="glasses_take_photo">Take photo</string>
+    <string name="glasses_permission_failed">Permission failed: %1$s</string>
+    <string name="a11y_latest_capture">Latest capture from the glasses</string>
+
+    <string name="glasses_status_idle">Glasses idle</string>
+    <string name="glasses_status_connecting">Connecting\u2026</string>
+    <string name="glasses_status_ready">Streaming</string>
+    <string name="glasses_status_failed">Failed \u2014 %1$s</string>
+    <string name="a11y_glasses_status">Glasses: %1$s</string>
+
+    <!-- settings -->
+    <string name="settings_appearance">Appearance</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="settings_which_ai">Which AI answers?</string>
+    <string name="settings_gemini_model">Gemini model</string>
+    <string name="settings_gemini_key">Gemini API key</string>
+    <string name="settings_gemini_hint">Gemini hears the recording directly, so no transcription server is needed.</string>
+    <string name="settings_server_url">Server URL</string>
+    <string name="settings_model_name">Model name</string>
+    <string name="settings_models_loading">Looking for models\u2026</string>
+    <string name="settings_models_none">No models are loaded on that server</string>
+    <string name="settings_models_refresh">Refresh list</string>
+    <string name="settings_api_key_optional">API key (optional)</string>
+    <string name="settings_local_vision">This model can see images</string>
+    <string name="settings_local_tools">This model can call tools</string>
+    <string name="settings_local_hint">LM Studio: enable \"Serve on Local Network\" so the phone can reach it, then use your Tailscale address rather than localhost.</string>
+    <string name="settings_claude_model">Claude model</string>
+    <string name="settings_claude_key">Anthropic API key</string>
+    <string name="settings_speech_to_text">Speech to text</string>
+    <string name="settings_speech_hint">This backend cannot hear audio, so speech is transcribed first.</string>
+    <string name="settings_whisper_same_server">Same server as the model</string>
+    <string name="settings_whisper_url">Whisper URL</string>
+    <string name="settings_whisper_model">Whisper model</string>
+    <string name="settings_test_connection">Test connection</string>
+    <string name="settings_testing">Testing\u2026</string>
+    <string name="settings_permissions">Permissions</string>
+
+    <!-- permissions -->
+    <string name="perm_granted">%1$s granted</string>
+    <string name="perm_bluetooth_title">Bluetooth</string>
+    <string name="perm_bluetooth_body">The glasses connect over Bluetooth. Cicero needs permission to find and pair with them.</string>
+    <string name="perm_bluetooth_action">Allow Bluetooth</string>
+    <string name="perm_notifications_title">Notifications</string>
+    <string name="perm_notifications_body">Reminders you ask Cicero to set arrive as notifications. Without this they are scheduled but never shown.</string>
+    <string name="perm_notifications_action">Allow notifications</string>
+    <string name="perm_listener_title">Notification access</string>
+    <string name="perm_listener_body">Needed to see and control what is playing in other apps. This one is a toggle in Android settings, not a prompt.</string>
+    <string name="perm_listener_action">Open settings</string>
+
+    <!-- form fields -->
+    <string name="a11y_show_field">Show %1$s</string>
+    <string name="a11y_hide_field">Hide %1$s</string>
+</resources>

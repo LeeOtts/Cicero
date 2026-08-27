@@ -1,0 +1,10 @@
+<resources>
+    <!-- Must stay in sync with CiceroLight.background / CiceroDark.background in
+         ui/theme/Color.kt. This is the window background the framework paints
+         before Compose draws its first frame; a mismatch shows as a colour pop. -->
+    <color name="window_background">#FFF5F5F0</color>
+
+    <color name="brand_purple">#FF4B0082</color>
+    <color name="brand_cobalt">#FF2A00D0</color>
+    <color name="brand_off_white">#FFF5F5F0</color>
+</resources>
