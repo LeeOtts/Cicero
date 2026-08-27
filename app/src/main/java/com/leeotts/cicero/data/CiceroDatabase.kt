@@ -50,7 +50,10 @@ interface CiceroDao {
         return id
     }
 
-    @Query("SELECT * FROM turns WHERE conversationId = :conversationId ORDER BY createdAt ASC")
+    @Query(
+        "SELECT * FROM turns WHERE conversationId = :conversationId " +
+            "ORDER BY createdAt ASC, id ASC"
+    )
     fun observeTurns(conversationId: Long): Flow<List<Turn>>
 
     @Query("SELECT COUNT(*) FROM turns WHERE conversationId = :conversationId")
@@ -94,7 +97,7 @@ interface CiceroDao {
 @Database(
     entities = [Conversation::class, Turn::class, TurnFts::class, Note::class],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class CiceroDatabase : RoomDatabase() {

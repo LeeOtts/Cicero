@@ -141,6 +141,17 @@ object BrainFactory {
         )
     }
 
+    /**
+     * The brain used for background chores - today, naming a thread. Claude has a
+     * fast model that writes a five-word title as well as Opus does for a fifth
+     * of the price; the other backends have no cheaper sibling, so they answer
+     * for themselves.
+     */
+    fun titler(config: BrainConfig): Brain = when (config.choice) {
+        BrainChoice.CLAUDE -> ClaudeBrain(config.claudeKey, ClaudeBrain.FAST_MODEL)
+        else -> brain(config)
+    }
+
     /** Gemini takes audio directly; everything else transcribes first. */
     fun transcriber(config: BrainConfig, brain: Brain): Transcriber =
         if (brain.acceptsAudio) NoOpTranscriber

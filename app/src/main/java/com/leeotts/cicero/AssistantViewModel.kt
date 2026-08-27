@@ -156,10 +156,15 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 tools = ToolRegistry.build(getApplication(), repository, glasses, brain),
             )
 
+            val priorMessages = history.size
             var failed = false
+            var photo: ByteArray? = null
+            var newMessages: List<Msg> = emptyList()
             val answer = try {
                 val result = assistant.ask(text = question, priorHistory = history)
                 history = result.history
+                newMessages = result.history.drop(priorMessages)
+                photo = result.photo?.bytes
                 result.spoken
             } catch (e: BrainException) {
                 failed = true
@@ -170,13 +175,20 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 "Something went wrong: ${e.message}"
             }
 
+            // Logged before the answer so the thread reads in the order things
+            // happened.
+            recordToolTurns(conversationId, newMessages)
+
             repository.addTurn(
                 conversationId,
                 Role.ASSISTANT,
                 answer,
+                photoJpeg = photo,
                 now = System.currentTimeMillis(),
             )
-            if (isFirstTurn) repository.ensureTitled(conversationId, brain, question)
+            if (isFirstTurn) {
+                repository.ensureTitled(conversationId, BrainFactory.titler(cfg), question)
+            }
 
             _exchanges.value = _exchanges.value +
                 Exchange(question, answer, brain.displayName, isError = failed)
@@ -184,8 +196,41 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Writes one TOOL turn per tool result, so a thread records what the
+     * assistant actually did rather than only what it said - which is how the
+     * three backends get compared on tool reliability.
+     *
+     * Reconstructed from the history [Assistant] returns rather than written by
+     * [Assistant] itself, which deliberately knows nothing about the data layer.
+     * Timestamps are stepped because several tools can run inside one
+     * millisecond.
+     */
+    private suspend fun recordToolTurns(conversationId: Long, messages: List<Msg>) {
+        val results = messages.filterIsInstance<Msg.ToolResult>()
+        if (results.isEmpty()) return
+
+        val arguments = messages.filterIsInstance<Msg.Assistant>()
+            .flatMap { it.toolCalls }
+            .associate { it.id to it.arguments.toString() }
+
+        var stamp = System.currentTimeMillis()
+        results.forEach { result ->
+            repository.addTurn(
+                conversationId,
+                Role.TOOL,
+                text = "${result.name}: ${result.content}".take(TOOL_TEXT_LIMIT),
+                toolCallsJson = arguments[result.callId],
+                now = stamp++,
+            )
+        }
+    }
+
     private companion object {
         const val RECENT_LIMIT = 6
+
+        /** Tool output can be long; the thread shows enough to audit the call. */
+        const val TOOL_TEXT_LIMIT = 500
     }
 
     /** Starts a fresh thread; the next question carries no prior context. */

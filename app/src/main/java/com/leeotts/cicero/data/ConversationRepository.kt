@@ -1,7 +1,6 @@
 package com.leeotts.cicero.data
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.util.Log
 import com.leeotts.cicero.TAG
 import com.leeotts.cicero.ai.Brain
@@ -50,11 +49,11 @@ class ConversationRepository(context: Context) {
         conversationId: Long,
         role: Role,
         text: String,
-        photo: Bitmap? = null,
+        photoJpeg: ByteArray? = null,
         toolCallsJson: String? = null,
         now: Long,
     ): Long {
-        val path = photo?.let { savePhoto(it, now) }
+        val path = photoJpeg?.let { savePhoto(it, now) }
         val id = dao.insertTurn(
             Turn(
                 conversationId = conversationId,
@@ -121,12 +120,17 @@ class ConversationRepository(context: Context) {
      */
     suspend fun restoreNote(note: Note): Long = dao.insertNote(note)
 
-    private suspend fun savePhoto(bitmap: Bitmap, now: Long): String? =
+    /**
+     * Captures arrive already JPEG-encoded from the look tool, so the bytes are
+     * written straight through: decoding to a Bitmap only to re-compress would
+     * lose quality for nothing.
+     */
+    private suspend fun savePhoto(jpeg: ByteArray, now: Long): String? =
         withContext(Dispatchers.IO) {
             runCatching {
                 val dir = File(appContext.filesDir, "captures").apply { mkdirs() }
                 val file = File(dir, "capture-$now.jpg")
-                file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+                file.outputStream().use { it.write(jpeg) }
                 file.absolutePath
             }.getOrElse {
                 Log.e(TAG, "failed to save capture", it)

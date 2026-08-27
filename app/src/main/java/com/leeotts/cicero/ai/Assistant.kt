@@ -34,6 +34,11 @@ class Assistant(
         val spoken: String,
         val transcript: String?,
         val history: List<Msg>,
+        /**
+         * The last image any tool produced this turn - the one that actually
+         * informed the answer, and what the caller persists with the turn.
+         */
+        val photo: Image? = null,
     )
 
     private val byName = tools.associateBy { it.spec.name }
@@ -63,6 +68,7 @@ class Assistant(
         // Only advertise tools the backend can actually use. A model that cannot
         // call tools must not be handed them and left to improvise.
         val advertised = if (brain.supportsTools) tools.map { it.spec } else emptyList()
+        var lastImage: Image? = null
 
         repeat(MAX_TOOL_ROUNDS) { round ->
             val reply = brain.respond(systemPrompt, history, advertised)
@@ -72,7 +78,7 @@ class Assistant(
                     "I did not get an answer back."
                 }
                 history += Msg.Assistant(text = spoken)
-                return Result(spoken, transcript, history)
+                return Result(spoken, transcript, history, lastImage)
             }
 
             history += Msg.Assistant(reply.text, reply.toolCalls)
@@ -89,6 +95,7 @@ class Assistant(
                         ToolOutcome(e.message ?: "That action failed.", isError = true)
                     }
                 }
+                outcome.image?.let { lastImage = it }
                 history += Msg.ToolResult(
                     callId = call.id,
                     name = call.name,
@@ -104,7 +111,7 @@ class Assistant(
         // Ran out of rounds without a spoken answer.
         val spoken = "I got stuck working on that."
         history += Msg.Assistant(text = spoken)
-        return Result(spoken, transcript, history)
+        return Result(spoken, transcript, history, lastImage)
     }
 
     companion object {

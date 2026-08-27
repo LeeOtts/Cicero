@@ -70,6 +70,12 @@ android {
     }
 }
 
+// Room schemas are exported and committed so a future version bump can be given
+// a real migration instead of a destructive fallback. See app/schemas/.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
