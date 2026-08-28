@@ -62,8 +62,6 @@
     <string name="map_last_destination">Last destination: %1$s</string>
     <string name="map_no_destination">No destination yet. Ask Cicero to navigate somewhere, or to find something nearby.</string>
     <string name="map_recentre">Update my location</string>
-    <string name="map_no_key_title">No Maps key set</string>
-    <string name="map_no_key_body">The in-app map needs a Maps SDK for Android key. Create a Google Cloud project with billing enabled, turn on \"Maps SDK for Android\", then put maps_api_key=YOUR_KEY in local.properties and rebuild. Navigating and finding places nearby are plain intents and already work without this.</string>
 
     <!-- glasses -->
     <string name="glasses_registration">Registration: %1$s</string>

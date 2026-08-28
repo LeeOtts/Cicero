@@ -21,9 +21,11 @@ coreSplashscreen = "1.0.1"
 # dependencyInsight, and true before any maps work. Kept on 2.8.5 only because
 # nothing here needs 2.9.x; the BOM no longer decides the Compose version.
 navigation = "2.8.5"
-# View-based Maps, not maps-compose: maps-compose resolves Compose to 1.9 and
-# would drag the whole stack past the composeBom pin above.
-playServicesMaps = "20.0.0"
+# MapLibre, not the Maps SDK for Android: the Google SDK refuses to draw without
+# a Google Cloud project with billing enabled, and this app is one person's.
+# Tiles come from OpenFreeMap - no key, no account, no request limit.
+maplibre = "13.5.1"
+# Fused location is free and keyless; only the Maps SDK needed billing.
 playServicesLocation = "21.4.0"
 
 [libraries]
@@ -50,7 +52,7 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 
-play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
+maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "maplibre" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 
 mwdat-core = { group = "com.meta.wearable", name = "mwdat-core", version.ref = "mwdat" }

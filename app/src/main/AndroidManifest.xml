@@ -36,15 +36,6 @@
             android:name="com.meta.wearable.mwdat.CLIENT_TOKEN"
             android:value="${mwdat_client_token}" />
 
-        <!--
-          Maps SDK for Android. Empty until maps_api_key is set in
-          local.properties; navigation and nearby search are plain intents and
-          work without it.
-        -->
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="${mapsApiKey}" />
-
         <activity
             android:name=".MainActivity"
             android:exported="true"

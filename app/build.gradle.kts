@@ -32,6 +32,11 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // MapLibre ships native renderers for four ABIs and added ~50 MB to the
+        // debug APK. This app targets one phone and one emulator, so package the
+        // two that are actually used. Drop this filter to build for anything else.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+
         // In Developer Mode attestation is skipped, so 0/0 is correct here.
         // Replace with Wearables Developer Center credentials for a published build.
         //
@@ -45,12 +50,6 @@ android {
         manifestPlaceholders["mwdat_client_token"] = "0"
 
         buildConfigField("String", "GEMINI_API_KEY", "\"${secret("gemini_api_key")}\"")
-
-        // The Maps SDK reads its key from the manifest. BuildConfig carries it as
-        // well, purely so the Map screen can say "no key set" instead of showing
-        // the grey grid the SDK draws when authentication fails.
-        manifestPlaceholders["mapsApiKey"] = secret("maps_api_key")
-        buildConfigField("String", "MAPS_API_KEY", "\"${secret("maps_api_key")}\"")
     }
 
     buildTypes {
@@ -93,7 +92,7 @@ dependencies {
     implementation(libs.mwdat.camera)
     implementation(libs.mwdat.mockdevice)
 
-    implementation(libs.play.services.maps)
+    implementation(libs.maplibre.android)
     implementation(libs.play.services.location)
 
     implementation(libs.okhttp)
