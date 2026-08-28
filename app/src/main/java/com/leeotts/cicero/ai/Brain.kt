@@ -91,6 +91,15 @@ interface Brain {
     val supportsVision: Boolean
     val supportsTools: Boolean
 
+    /**
+     * True when the backend can look things up on the web for itself. This is a
+     * server-side tool on both Gemini and Claude - declared in the request and
+     * resolved before the reply comes back - so it never reaches the client tool
+     * loop. A local model has no such thing, and must say so rather than
+     * answering a question about today from training data.
+     */
+    val supportsWebSearch: Boolean
+
     suspend fun respond(
         system: String,
         history: List<Msg>,

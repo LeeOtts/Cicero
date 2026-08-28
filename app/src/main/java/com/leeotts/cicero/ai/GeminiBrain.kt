@@ -28,6 +28,7 @@ class GeminiBrain(
     override val acceptsAudio = true
     override val supportsVision = true
     override val supportsTools = true
+    override val supportsWebSearch = true
 
     override suspend fun respond(
         system: String,
@@ -54,6 +55,12 @@ class GeminiBrain(
                             }
                         }
                     })
+                    // Grounding, as a second entry alongside the declarations.
+                    // Gemini 3 models allow a built-in tool and function calling
+                    // in one request; older ones did not, and older ones also
+                    // spell this google_search_retrieval. Added only when the
+                    // caller brought tools, so the auto-title never searches.
+                    add(buildJsonObject { putJsonObject("google_search") { } })
                 }
             }
         }

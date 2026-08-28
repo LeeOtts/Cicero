@@ -44,6 +44,15 @@ class Assistant(
     private val byName = tools.associateBy { it.spec.name }
 
     /**
+     * Backends that can search know their own tools and need no telling. The
+     * ones that cannot do need telling, or "what is it going to cost today"
+     * comes back as a confident answer from training data.
+     */
+    private val effectiveSystem: String =
+        if (brain.supportsWebSearch) systemPrompt else "$systemPrompt\n\n$NO_WEB_SEARCH"
+
+
+    /**
      * @param audio the recorded utterance, or null when [text] is supplied directly
      * @param priorHistory earlier turns, for follow-up questions
      */
@@ -71,7 +80,7 @@ class Assistant(
         var lastImage: Image? = null
 
         repeat(MAX_TOOL_ROUNDS) { round ->
-            val reply = brain.respond(systemPrompt, history, advertised)
+            val reply = brain.respond(effectiveSystem, history, advertised)
 
             if (!reply.wantsTools) {
                 val spoken = reply.text?.trim().orEmpty().ifBlank {
@@ -117,6 +126,13 @@ class Assistant(
     companion object {
         /** Enough for look-then-answer plus a couple of follow-on actions. */
         const val MAX_TOOL_ROUNDS = 5
+
+        val NO_WEB_SEARCH = """
+            You cannot search the web. If an answer depends on current
+            information - news, prices, opening hours, timetables, anything that
+            changes - say plainly that you cannot look it up, rather than
+            guessing from what you were trained on.
+        """.trimIndent()
 
         val DEFAULT_SYSTEM_PROMPT = """
             You are a hands-free assistant running on a pair of smart glasses.

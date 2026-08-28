@@ -35,6 +35,9 @@ class OpenAiCompatibleBrain(
     override val id = "openai-compatible"
     override val acceptsAudio = false
 
+    /** No OpenAI-compatible server offers a hosted search tool. */
+    override val supportsWebSearch = false
+
     // Accept a base url with or without a trailing /v1 so either can be pasted.
     private val root = baseUrl.trimEnd('/').removeSuffix("/v1")
 
