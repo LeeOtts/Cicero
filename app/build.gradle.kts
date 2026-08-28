@@ -45,6 +45,12 @@ android {
         manifestPlaceholders["mwdat_client_token"] = "0"
 
         buildConfigField("String", "GEMINI_API_KEY", "\"${secret("gemini_api_key")}\"")
+
+        // The Maps SDK reads its key from the manifest. BuildConfig carries it as
+        // well, purely so the Map screen can say "no key set" instead of showing
+        // the grey grid the SDK draws when authentication fails.
+        manifestPlaceholders["mapsApiKey"] = secret("maps_api_key")
+        buildConfigField("String", "MAPS_API_KEY", "\"${secret("maps_api_key")}\"")
     }
 
     buildTypes {
@@ -86,6 +92,9 @@ dependencies {
     implementation(libs.mwdat.core)
     implementation(libs.mwdat.camera)
     implementation(libs.mwdat.mockdevice)
+
+    implementation(libs.play.services.maps)
+    implementation(libs.play.services.location)
 
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)

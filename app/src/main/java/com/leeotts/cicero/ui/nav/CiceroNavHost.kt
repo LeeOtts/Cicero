@@ -12,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.leeotts.cicero.AssistantViewModel
 import com.leeotts.cicero.GlassesViewModel
+import com.leeotts.cicero.MapViewModel
 import com.leeotts.cicero.NotesViewModel
 import com.leeotts.cicero.R
 import com.leeotts.cicero.ai.BrainChoice
@@ -19,6 +20,7 @@ import com.leeotts.cicero.ai.BrainConfig
 import com.leeotts.cicero.ui.AskScreen
 import com.leeotts.cicero.ui.GlassesScreen
 import com.leeotts.cicero.ui.HistoryScreen
+import com.leeotts.cicero.ui.MapScreen
 import com.leeotts.cicero.ui.NotesScreen
 import com.leeotts.cicero.ui.SettingsScreen
 import com.leeotts.cicero.ui.ThreadScreen
@@ -29,6 +31,7 @@ fun CiceroNavHost(
     assistant: AssistantViewModel,
     glasses: GlassesViewModel,
     notes: NotesViewModel,
+    map: MapViewModel,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -89,6 +92,10 @@ fun CiceroNavHost(
 
         composable<Route.Glasses> {
             GlassesScreen(viewModel = glasses)
+        }
+
+        composable<Route.Map> {
+            MapScreen(viewModel = map)
         }
     }
 }

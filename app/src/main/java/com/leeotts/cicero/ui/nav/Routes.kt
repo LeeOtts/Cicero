@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -40,6 +41,9 @@ sealed interface Route {
 
     @Serializable
     data object Glasses : Route
+
+    @Serializable
+    data object Map : Route
 }
 
 data class TopLevelDestination(
@@ -60,4 +64,5 @@ val topLevelDestinations = listOf(
     TopLevelDestination(Route.Notes, R.string.nav_notes, Icons.Filled.EditNote),
     TopLevelDestination(Route.Settings, R.string.nav_settings, Icons.Filled.Settings),
     TopLevelDestination(Route.Glasses, R.string.nav_glasses, Icons.Filled.Visibility),
+    TopLevelDestination(Route.Map, R.string.nav_map, Icons.Filled.Place),
 )

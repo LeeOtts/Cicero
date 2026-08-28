@@ -8,6 +8,7 @@
     <string name="nav_notes">Notes</string>
     <string name="nav_settings">Settings</string>
     <string name="nav_glasses">Glasses</string>
+    <string name="nav_map">Map</string>
     <string name="nav_recent">Recent</string>
     <string name="title_conversation">Conversation</string>
     <string name="untitled_conversation">Untitled</string>
@@ -56,6 +57,13 @@
     <string name="action_save">Save</string>
     <string name="action_cancel">Cancel</string>
     <string name="a11y_reminder">Reminder</string>
+
+    <!-- map -->
+    <string name="map_last_destination">Last destination: %1$s</string>
+    <string name="map_no_destination">No destination yet. Ask Cicero to navigate somewhere, or to find something nearby.</string>
+    <string name="map_recentre">Update my location</string>
+    <string name="map_no_key_title">No Maps key set</string>
+    <string name="map_no_key_body">The in-app map needs a Maps SDK for Android key. Create a Google Cloud project with billing enabled, turn on \"Maps SDK for Android\", then put maps_api_key=YOUR_KEY in local.properties and rebuild. Navigating and finding places nearby are plain intents and already work without this.</string>
 
     <!-- glasses -->
     <string name="glasses_registration">Registration: %1$s</string>
@@ -129,6 +137,9 @@
     <string name="perm_listener_title">Notification access</string>
     <string name="perm_listener_body">Needed to see and control what is playing in other apps. This one is a toggle in Android settings, not a prompt.</string>
     <string name="perm_listener_action">Open settings</string>
+    <string name="perm_location_title">Location</string>
+    <string name="perm_location_body">The glasses have no GPS of their own, so Cicero uses the phone\'s. Needed to answer where you are and to find things near you.</string>
+    <string name="perm_location_action">Allow location</string>
 
     <!-- form fields -->
     <string name="a11y_show_field">Show %1$s</string>

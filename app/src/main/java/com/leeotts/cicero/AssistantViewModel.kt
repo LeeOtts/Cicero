@@ -48,6 +48,8 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     private val repository = ConversationRepository(app)
     // Shared with GlassesViewModel and the look tool; see CiceroApp.glasses.
     private val glasses = getApplication<CiceroApp>().glasses
+    private val location = getApplication<CiceroApp>().location
+    private val destinations = getApplication<CiceroApp>().destinations
 
     val config: StateFlow<BrainConfig> = settings.config
         .stateIn(viewModelScope, SharingStarted.Eagerly, BrainConfig())
@@ -153,7 +155,14 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
             val assistant = Assistant(
                 brain = brain,
                 transcriber = BrainFactory.transcriber(cfg, brain),
-                tools = ToolRegistry.build(getApplication(), repository, glasses, brain),
+                tools = ToolRegistry.build(
+                    context = getApplication(),
+                    repository = repository,
+                    glasses = glasses,
+                    location = location,
+                    destinations = destinations,
+                    brain = brain,
+                ),
             )
 
             val priorMessages = history.size

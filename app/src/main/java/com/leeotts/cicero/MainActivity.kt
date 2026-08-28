@@ -13,6 +13,7 @@ class MainActivity : ComponentActivity() {
     private val assistant: AssistantViewModel by viewModels()
     private val glasses: GlassesViewModel by viewModels()
     private val notes: NotesViewModel by viewModels()
+    private val map: MapViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -20,6 +21,8 @@ class MainActivity : ComponentActivity() {
         // Scaffold and the drawer sheet apply their own window insets, so nothing
         // here should pad by hand.
         enableEdgeToEdge()
-        setContent { CiceroRoot(assistant = assistant, glasses = glasses, notes = notes) }
+        setContent {
+            CiceroRoot(assistant = assistant, glasses = glasses, notes = notes, map = map)
+        }
     }
 }

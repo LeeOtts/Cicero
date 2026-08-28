@@ -5,6 +5,8 @@ import com.leeotts.cicero.ai.Brain
 import com.leeotts.cicero.ai.Tool
 import com.leeotts.cicero.data.ConversationRepository
 import com.leeotts.cicero.glasses.GlassesController
+import com.leeotts.cicero.location.DestinationLog
+import com.leeotts.cicero.location.LocationProvider
 
 /** Assembles the tool list for a turn. */
 object ToolRegistry {
@@ -18,6 +20,8 @@ object ToolRegistry {
         context: Context,
         repository: ConversationRepository,
         glasses: GlassesController,
+        location: LocationProvider,
+        destinations: DestinationLog,
         brain: Brain,
     ): List<Tool> = buildList {
         if (brain.supportsVision) add(LookTool(glasses))
@@ -27,5 +31,10 @@ object ToolRegistry {
         add(SaveNoteTool(repository))
         add(SearchLogTool(repository))
         add(MediaControlTool(context))
+        // Order is deliberate and stable: the tool list is the first thing in a
+        // cached prompt prefix, so reordering it invalidates the cache.
+        add(WhereAmITool(context, location))
+        add(NavigateTool(context, destinations))
+        add(FindNearbyTool(context, location, destinations))
     }
 }

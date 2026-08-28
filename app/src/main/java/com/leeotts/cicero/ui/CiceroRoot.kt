@@ -41,6 +41,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.leeotts.cicero.AssistantViewModel
 import com.leeotts.cicero.GlassesViewModel
+import com.leeotts.cicero.MapViewModel
 import com.leeotts.cicero.NotesViewModel
 import com.leeotts.cicero.R
 import com.leeotts.cicero.data.Conversation
@@ -63,6 +64,7 @@ fun CiceroRoot(
     assistant: AssistantViewModel,
     glasses: GlassesViewModel,
     notes: NotesViewModel,
+    map: MapViewModel,
 ) {
     val config by assistant.config.collectAsStateWithLifecycle()
 
@@ -162,6 +164,7 @@ fun CiceroRoot(
                         assistant = assistant,
                         glasses = glasses,
                         notes = notes,
+                        map = map,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
