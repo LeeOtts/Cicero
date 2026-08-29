@@ -2,6 +2,8 @@ package com.leeotts.cicero.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,8 +28,15 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -35,10 +44,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.annotation.StringRes
 import com.leeotts.cicero.R
+import com.leeotts.cicero.OAuthState
 import com.leeotts.cicero.TestResult
-import com.leeotts.cicero.ai.BrainChoice
 import com.leeotts.cicero.ai.BrainConfig
 import com.leeotts.cicero.ai.ModelList
+import com.leeotts.cicero.ai.Provider
+import com.leeotts.cicero.ai.Providers
+import com.leeotts.cicero.ai.Target
+import com.leeotts.cicero.ai.TaskRole
+import com.leeotts.cicero.home.NestConfig
 import com.leeotts.cicero.ui.components.ModelPicker
 import com.leeotts.cicero.ui.components.PermissionCard
 import com.leeotts.cicero.ui.components.SectionHeader
@@ -49,32 +63,47 @@ import com.leeotts.cicero.ui.components.SettingToggle
 import com.leeotts.cicero.ui.theme.Space
 import com.leeotts.cicero.ui.theme.ThemeMode
 import com.leeotts.cicero.ui.theme.applyNightMode
+import com.leeotts.cicero.util.assistantRoleRequest
 import com.leeotts.cicero.util.hasNotificationAccess
+import com.leeotts.cicero.util.isDefaultAssistant
 import com.leeotts.cicero.util.isGranted
+import com.leeotts.cicero.util.openAssistantSettings
 import com.leeotts.cicero.util.openNotificationAccessSettings
+import com.leeotts.cicero.util.openUrl
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     config: BrainConfig,
     busy: Boolean,
     testResult: TestResult?,
-    localModels: ModelList,
+    oauth: OAuthState,
+    models: (String) -> StateFlow<ModelList>,
     whisperModels: ModelList,
     onUpdate: ((BrainConfig) -> BrainConfig) -> Unit,
     onTest: () -> Unit,
-    onLoadLocalModels: (Boolean) -> Unit,
+    onLoadModels: (String, Boolean) -> Unit,
     onLoadWhisperModels: (Boolean) -> Unit,
+    onSignIn: () -> Unit,
+    onOAuthResumed: () -> Unit,
+    nestConfig: NestConfig,
+    nestTestResult: TestResult?,
+    onUpdateNest: ((NestConfig) -> NestConfig) -> Unit,
+    onTestNest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
 
     // Warmed as each section appears, so the first tap on a picker shows names
     // rather than a spinner.
-    LaunchedEffect(config.choice) {
-        if (config.choice == BrainChoice.LOCAL) onLoadLocalModels(false)
-        if (config.choice != BrainChoice.GEMINI) onLoadWhisperModels(false)
+    LaunchedEffect(config.providerId) {
+        onLoadModels(config.providerId, false)
+        if (!config.provider.acceptsAudio) onLoadWhisperModels(false)
     }
+
+    // A Custom Tab has no cancel callback, so returning to this screen is the
+    // only signal that a sign-in was abandoned.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { onOAuthResumed() }
 
     Column(
         modifier = modifier
@@ -101,64 +130,53 @@ fun SettingsScreen(
         }
 
         SectionHeader(stringResource(R.string.settings_which_ai))
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            BrainChoice.entries.forEach { choice ->
-                FilterChip(
-                    selected = config.choice == choice,
-                    onClick = { onUpdate { it.copy(choice = choice) } },
-                    label = { Text(stringResource(choice.label)) },
-                )
-            }
+        // A wrapping row rather than a dropdown: nine short proper nouns fit in
+        // three lines, and every option stays visible without a tap.
+        ProviderChips(selected = config.providerId) { id ->
+            onUpdate { it.copy(providerId = id) }
         }
 
-        when (config.choice) {
-            BrainChoice.GEMINI -> {
-                SettingField(stringResource(R.string.settings_gemini_model), config.geminiModel) { v ->
-                    onUpdate { it.copy(geminiModel = v) }
-                }
-                SecretField(stringResource(R.string.settings_gemini_key), config.geminiKey) { v ->
-                    onUpdate { it.copy(geminiKey = v) }
-                }
-                Hint(stringResource(R.string.settings_gemini_hint))
-            }
+        ProviderSettings(
+            provider = config.provider,
+            config = config,
+            oauth = oauth,
+            models = models,
+            onUpdate = onUpdate,
+            onLoadModels = onLoadModels,
+            onSignIn = onSignIn,
+        )
 
-            BrainChoice.LOCAL -> {
-                SettingField(stringResource(R.string.settings_server_url), config.localBaseUrl) { v ->
-                    onUpdate { it.copy(localBaseUrl = v) }
-                }
-                ModelPicker(
-                    label = stringResource(R.string.settings_model_name),
-                    value = config.localModel,
-                    models = localModels,
-                    onExpand = { onLoadLocalModels(false) },
-                    onRefresh = { onLoadLocalModels(true) },
-                ) { v -> onUpdate { it.copy(localModel = v) } }
-                SecretField(stringResource(R.string.settings_api_key_optional), config.localKey) { v ->
-                    onUpdate { it.copy(localKey = v) }
-                }
-                SettingToggle(stringResource(R.string.settings_local_vision), config.localVision) { v ->
-                    onUpdate { it.copy(localVision = v) }
-                }
-                SettingToggle(stringResource(R.string.settings_local_tools), config.localTools) { v ->
-                    onUpdate { it.copy(localTools = v) }
-                }
-                Hint(stringResource(R.string.settings_local_hint))
-            }
-
-            BrainChoice.CLAUDE -> {
-                SettingField(stringResource(R.string.settings_claude_model), config.claudeModel) { v ->
-                    onUpdate { it.copy(claudeModel = v) }
-                }
-                SecretField(stringResource(R.string.settings_claude_key), config.claudeKey) { v ->
-                    onUpdate { it.copy(claudeKey = v) }
-                }
-            }
+        SectionHeader(stringResource(R.string.settings_routing))
+        SettingToggle(
+            stringResource(R.string.settings_routing_enabled),
+            config.routingEnabled,
+        ) { v -> onUpdate { it.copy(routingEnabled = v) } }
+        if (config.routingEnabled) {
+            Hint(stringResource(R.string.settings_routing_hint))
+            RoleSetting(
+                role = TaskRole.FAST,
+                label = stringResource(R.string.settings_role_fast),
+                config = config,
+                models = models,
+                onUpdate = onUpdate,
+                onLoadModels = onLoadModels,
+            )
+            RoleSetting(
+                role = TaskRole.DEEP,
+                label = stringResource(R.string.settings_role_deep),
+                config = config,
+                models = models,
+                onUpdate = onUpdate,
+                onLoadModels = onLoadModels,
+            )
         }
 
-        if (config.choice != BrainChoice.GEMINI) {
+        // Gemini is the only backend that takes raw audio; everything else needs
+        // a transcriber in front of it.
+        if (!config.provider.acceptsAudio) {
             SectionHeader(stringResource(R.string.settings_speech_to_text))
             Hint(stringResource(R.string.settings_speech_hint))
-            if (config.choice == BrainChoice.LOCAL) {
+            if (config.provider.userEditableUrl) {
                 SettingToggle(
                     stringResource(R.string.settings_whisper_same_server),
                     config.whisperSameServer,
@@ -185,8 +203,160 @@ fun SettingsScreen(
         }
         testResult?.let { TestResultRow(it) }
 
+        SectionHeader(stringResource(R.string.settings_nest))
+        Hint(stringResource(R.string.settings_nest_hint))
+        SettingField(
+            stringResource(R.string.settings_nest_project),
+            nestConfig.projectId,
+        ) { v -> onUpdateNest { it.copy(projectId = v) } }
+        SettingField(
+            stringResource(R.string.settings_nest_client_id),
+            nestConfig.clientId,
+        ) { v -> onUpdateNest { it.copy(clientId = v) } }
+        SecretField(
+            stringResource(R.string.settings_nest_client_secret),
+            nestConfig.clientSecret,
+        ) { v -> onUpdateNest { it.copy(clientSecret = v) } }
+        SecretField(
+            stringResource(R.string.settings_nest_refresh_token),
+            nestConfig.refreshToken,
+        ) { v -> onUpdateNest { it.copy(refreshToken = v) } }
+        Button(onClick = onTestNest, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.settings_nest_test))
+        }
+        nestTestResult?.let { TestResultRow(it) }
+
         SectionHeader(stringResource(R.string.settings_permissions))
         PermissionsSection()
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ProviderChips(selected: String, onPick: (String) -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+        verticalArrangement = Arrangement.spacedBy(Space.xs),
+    ) {
+        Providers.all.forEach { provider ->
+            FilterChip(
+                selected = selected == provider.id,
+                onClick = { onPick(provider.id) },
+                label = { Text(provider.displayName) },
+            )
+        }
+    }
+}
+
+/**
+ * One section for every provider.
+ *
+ * There is deliberately no `when (provider)` here. Everything that used to make
+ * a provider special - its address, its key, its model list, whether it can see
+ * - is a field on [Provider] now, so adding a tenth provider changes nothing on
+ * this screen.
+ */
+@Composable
+private fun ProviderSettings(
+    provider: Provider,
+    config: BrainConfig,
+    oauth: OAuthState,
+    models: (String) -> StateFlow<ModelList>,
+    onUpdate: ((BrainConfig) -> BrainConfig) -> Unit,
+    onLoadModels: (String, Boolean) -> Unit,
+    onSignIn: () -> Unit,
+) {
+    val context = LocalContext.current
+    val modelList by remember(provider.id) { models(provider.id) }.collectAsStateWithLifecycle()
+    val key = config.keys[provider.id].orEmpty()
+
+    if (provider.userEditableUrl) {
+        SettingField(stringResource(R.string.settings_server_url), config.localBaseUrl) { v ->
+            onUpdate { it.copy(localBaseUrl = v) }
+        }
+    }
+
+    ModelPicker(
+        label = stringResource(R.string.settings_model_name),
+        value = config.modelFor(provider),
+        models = modelList,
+        onExpand = { onLoadModels(provider.id, false) },
+        onRefresh = { onLoadModels(provider.id, true) },
+    ) { v -> onUpdate { it.copy(models = it.models + (provider.id to v)) } }
+
+    // Signing in beats pasting a key, so it is offered until there IS a key -
+    // after which the field is shown so it can be seen, replaced or cleared.
+    if (provider.oauth && key.isBlank()) {
+        Button(
+            onClick = onSignIn,
+            enabled = oauth !is OAuthState.Exchanging,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.settings_sign_in, provider.displayName))
+        }
+        Hint(stringResource(R.string.settings_openrouter_hint))
+    } else {
+        SecretField(stringResource(R.string.settings_api_key), key) { v ->
+            onUpdate { it.copy(keys = it.keys + (provider.id to v)) }
+        }
+    }
+
+    when (oauth) {
+        OAuthState.Waiting -> Hint(stringResource(R.string.settings_oauth_waiting))
+        OAuthState.Exchanging -> Hint(stringResource(R.string.settings_oauth_exchanging))
+        is OAuthState.Failed -> Hint(oauth.message)
+        OAuthState.Idle -> Unit
+    }
+
+    // Only the self-hosted entry has capabilities nobody can know in advance.
+    if (provider.userEditableCaps) {
+        SettingToggle(stringResource(R.string.settings_local_vision), config.localVision) { v ->
+            onUpdate { it.copy(localVision = v) }
+        }
+        SettingToggle(stringResource(R.string.settings_local_tools), config.localTools) { v ->
+            onUpdate { it.copy(localTools = v) }
+        }
+    }
+
+    TextButton(onClick = { context.openUrl(provider.signupUrl) }) {
+        Text(stringResource(R.string.settings_get_key, provider.displayName))
+    }
+}
+
+/** Which provider and model answer one kind of turn. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RoleSetting(
+    role: TaskRole,
+    label: String,
+    config: BrainConfig,
+    models: (String) -> StateFlow<ModelList>,
+    onUpdate: ((BrainConfig) -> BrainConfig) -> Unit,
+    onLoadModels: (String, Boolean) -> Unit,
+) {
+    val target = config.targetFor(role)
+    val provider = target.provider
+    val modelList by remember(provider.id) { models(provider.id) }.collectAsStateWithLifecycle()
+
+    Text(label, style = MaterialTheme.typography.labelLarge)
+    ProviderChips(selected = provider.id) { id ->
+        onUpdate { cfg ->
+            cfg.copy(roles = cfg.roles + (role to Target(id, cfg.modelFor(Providers.byId(id)))))
+        }
+    }
+    ModelPicker(
+        label = stringResource(R.string.settings_model_name),
+        value = target.model,
+        models = modelList,
+        onExpand = { onLoadModels(provider.id, false) },
+        onRefresh = { onLoadModels(provider.id, true) },
+    ) { v -> onUpdate { cfg -> cfg.copy(roles = cfg.roles + (role to Target(provider.id, v))) } }
+
+    // The one routing mistake the user cannot see coming: most providers have no
+    // server-side search, and the assistant is told to say so rather than answer
+    // a question about today from training data.
+    if (role == TaskRole.FAST && !provider.webSearch) {
+        Hint(stringResource(R.string.settings_routing_no_search))
     }
 }
 
@@ -209,6 +379,13 @@ private fun PermissionsSection() {
 
     val notificationAccess = rememberSystemFlag { context.hasNotificationAccess() }
 
+    val isAssistant = rememberSystemFlag { context.isDefaultAssistant() }
+    // The result is ignored: the role dialog reports what the user chose, but
+    // rememberSystemFlag re-reads the real state on resume either way.
+    val assistantLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { isAssistant.value = context.isDefaultAssistant() }
+
     PermissionCard(
         title = stringResource(R.string.perm_notifications_title),
         body = stringResource(R.string.perm_notifications_body),
@@ -227,6 +404,20 @@ private fun PermissionsSection() {
         granted = notificationAccess.value,
         actionLabel = stringResource(R.string.perm_listener_action),
         onAction = { context.openNotificationAccessSettings() },
+    )
+
+    PermissionCard(
+        title = stringResource(R.string.perm_assistant_title),
+        body = stringResource(R.string.perm_assistant_body),
+        granted = isAssistant.value,
+        actionLabel = stringResource(R.string.perm_assistant_action),
+        onAction = {
+            // Not every build grants this role from a dialog; the ones that
+            // refuse expect the user to pick it in Settings.
+            val request = context.assistantRoleRequest()
+            if (request != null) assistantLauncher.launch(request)
+            else context.openAssistantSettings()
+        },
     )
 }
 

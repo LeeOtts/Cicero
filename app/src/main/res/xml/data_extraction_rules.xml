@@ -1,19 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   What leaves the device. This is the file that applies at minSdk 31.
+
+   API keys live in files/datastore/brain_settings.preferences_pb. They are
+   encrypted at rest (see KeystoreSecrets), but they are excluded here anyway,
+   for two separate reasons:
+
+   - cloud-backup: an API key is a bearer credential and has no business sitting
+     in someone else's cloud, encrypted or not.
+   - device-transfer: the Keystore key is device-bound and is NOT transferred, so
+     ciphertext moved to a new phone is unreadable garbage. Excluding it means
+     the user re-pastes a key, which is honest. Including it would present as
+     "my keys came back blank and the app is broken".
+
+   Conversation history, notes and the Room database are not excluded and still
+   back up normally.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="file" path="datastore/" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="file" path="datastore/" />
     </device-transfer>
-    -->
 </data-extraction-rules>

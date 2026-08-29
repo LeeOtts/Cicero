@@ -21,12 +21,10 @@
     <string name="ask_placeholder">Ask something</string>
     <string name="ask_send">Ask</string>
     <string name="ask_new_thread">New thread</string>
+    <string name="ask_stop_speaking">Stop speaking</string>
     <string name="ask_thinking">Thinking\u2026</string>
 
     <!-- which backend is answering -->
-    <string name="brain_gemini">Gemini</string>
-    <string name="brain_local">Local</string>
-    <string name="brain_claude">Claude</string>
     <string name="backend_with_model">%1$s (%2$s)</string>
     <string name="backend_no_model">no model set</string>
 
@@ -101,20 +99,13 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="settings_which_ai">Which AI answers?</string>
-    <string name="settings_gemini_model">Gemini model</string>
-    <string name="settings_gemini_key">Gemini API key</string>
-    <string name="settings_gemini_hint">Gemini hears the recording directly, so no transcription server is needed.</string>
     <string name="settings_server_url">Server URL</string>
     <string name="settings_model_name">Model name</string>
     <string name="settings_models_loading">Looking for models\u2026</string>
     <string name="settings_models_none">No models are loaded on that server</string>
     <string name="settings_models_refresh">Refresh list</string>
-    <string name="settings_api_key_optional">API key (optional)</string>
     <string name="settings_local_vision">This model can see images</string>
     <string name="settings_local_tools">This model can call tools</string>
-    <string name="settings_local_hint">LM Studio: enable \"Serve on Local Network\" so the phone can reach it, then use your Tailscale address rather than localhost.</string>
-    <string name="settings_claude_model">Claude model</string>
-    <string name="settings_claude_key">Anthropic API key</string>
     <string name="settings_speech_to_text">Speech to text</string>
     <string name="settings_speech_hint">This backend cannot hear audio, so speech is transcribed first.</string>
     <string name="settings_whisper_same_server">Same server as the model</string>
@@ -122,6 +113,25 @@
     <string name="settings_whisper_model">Whisper model</string>
     <string name="settings_test_connection">Test connection</string>
     <string name="settings_testing">Testing\u2026</string>
+    <string name="settings_api_key">API key</string>
+    <string name="settings_sign_in">Sign in with %1$s</string>
+    <string name="settings_get_key">Get a %1$s key</string>
+    <string name="settings_openrouter_hint">One sign-in reaches every major model through a single account. Providers do not let a chat subscription authorise another app, so this mints a real key you can revoke.</string>
+    <string name="settings_oauth_waiting">Waiting for the browser…</string>
+    <string name="settings_oauth_exchanging">Finishing sign-in…</string>
+    <string name="settings_routing">Route by task</string>
+    <string name="settings_routing_enabled">Pick the model per question</string>
+    <string name="settings_routing_hint">Short commands go to the fast model and harder questions to the deep one, decided from the wording alone so nothing is added to the wait. Saying "ask Claude…" overrides it.</string>
+    <string name="settings_routing_no_search">This model cannot search the web, so it will say so rather than guess at anything current.</string>
+    <string name="settings_role_fast">Fast — commands and quick lookups</string>
+    <string name="settings_role_deep">Deep — reasoning and open questions</string>
+    <string name="settings_nest">Nest thermostat</string>
+    <string name="settings_nest_hint">Set up through Google\'s Device Access console, which charges a one-off five dollars. Publish the OAuth consent screen rather than leaving it in testing, or Google expires the refresh token every seven days.</string>
+    <string name="settings_nest_project">Device Access project ID</string>
+    <string name="settings_nest_client_id">OAuth client ID</string>
+    <string name="settings_nest_client_secret">OAuth client secret</string>
+    <string name="settings_nest_refresh_token">Refresh token</string>
+    <string name="settings_nest_test">Test Nest connection</string>
     <string name="settings_permissions">Permissions</string>
 
     <!-- permissions -->
@@ -135,6 +145,9 @@
     <string name="perm_listener_title">Notification access</string>
     <string name="perm_listener_body">Needed to see and control what is playing in other apps. This one is a toggle in Android settings, not a prompt.</string>
     <string name="perm_listener_action">Open settings</string>
+    <string name="perm_assistant_title">Digital assistant</string>
+    <string name="perm_assistant_body">Makes long-pressing the power button open Cicero, so you can ask without unlocking and tapping. “Hey Meta” belongs to Meta AI and cannot be reassigned.</string>
+    <string name="perm_assistant_action">Make Cicero the assistant</string>
     <string name="perm_location_title">Location</string>
     <string name="perm_location_body">The glasses have no GPS of their own, so Cicero uses the phone\'s. Needed to answer where you are and to find things near you.</string>
     <string name="perm_location_action">Allow location</string>

@@ -10,6 +10,7 @@ import android.util.Log
 import com.leeotts.cicero.TAG
 import com.meta.wearable.dat.mockdevice.MockDeviceKit
 import com.meta.wearable.dat.mockdevice.api.GlassesModel
+import com.meta.wearable.dat.mockdevice.api.MockDeviceKitInterface
 import com.meta.wearable.dat.mockdevice.api.MockGlasses
 import com.meta.wearable.dat.mockdevice.api.camera.CameraFacing
 import java.io.File
@@ -28,6 +29,13 @@ object MockGlassesSupport {
     fun enable(context: Context): String {
         val kit = MockDeviceKit.getInstance(context)
         if (!kit.isEnabled) kit.enable()
+
+        // enable() is called more than once per process - the Glasses screen and
+        // the instrumentation tests both do it - and pairGlasses() adds another
+        // device every time. Clear what is already paired first, so
+        // AutoDeviceSelector is never choosing between a live device and one
+        // left powered off by an earlier call.
+        unpairAll(kit)
 
         var paired: MockGlasses? = null
         var failure: String? = null
@@ -53,9 +61,23 @@ object MockGlassesSupport {
     }
 
     fun disable(context: Context) {
-        glasses?.let { MockDeviceKit.getInstance(context).unpairDevice(it) }
+        val kit = MockDeviceKit.getInstance(context)
+        unpairAll(kit)
+        kit.disable()
+    }
+
+    /**
+     * Unpairs everything the kit holds, not just the device in [glasses]:
+     * a caller that disabled the kit directly leaves that field pointing at a
+     * device this object can no longer reach.
+     */
+    private fun unpairAll(kit: MockDeviceKitInterface) {
+        // Copied first - unpairDevice mutates the collection behind
+        // pairedDevices. Wrapped because a disabled kit has nothing to list.
+        runCatching {
+            kit.pairedDevices.toList().forEach { runCatching { kit.unpairDevice(it) } }
+        }
         glasses = null
-        MockDeviceKit.getInstance(context).disable()
     }
 
     /**

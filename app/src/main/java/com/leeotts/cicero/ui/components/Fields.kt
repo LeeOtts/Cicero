@@ -127,7 +127,15 @@ fun ModelPicker(
     onChange: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val ids = (models as? ModelList.Loaded)?.ids.orEmpty()
+    val all = (models as? ModelList.Loaded)?.ids.orEmpty()
+    // OpenRouter lists several hundred models, and an unfiltered dropdown that
+    // long is unusable. Filtering on whatever has been typed turns the field
+    // itself into the search box, with no second control to explain.
+    val ids = if (all.size > SEARCH_THRESHOLD && value.isNotBlank()) {
+        all.filter { it.contains(value, ignoreCase = true) }
+    } else {
+        all
+    }
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -189,3 +197,10 @@ fun ModelPicker(
         }
     }
 }
+
+/**
+ * Above this many models the picker filters on what has been typed. Chosen so a
+ * self-hosted server with a handful of models still shows all of them, while
+ * OpenRouter's several hundred become searchable.
+ */
+private const val SEARCH_THRESHOLD = 30

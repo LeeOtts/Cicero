@@ -53,6 +53,10 @@ class GlassesController {
     private var session: DeviceSession? = null
     private var camera: Camera? = null
 
+    /** Written by the openSession/attachCamera/startStream helpers, which cannot
+     *  return a reason of their own, and read back by [startOnce]. */
+    private var lastError: String? = null
+
     /** Opens a session and drives the stream to STREAMING so [capture] is instant. */
     suspend fun warmUp(): Boolean = lock.withLock { warmUpLocked() }
 
@@ -60,20 +64,36 @@ class GlassesController {
         if (_state.value is State.Ready) return true
         _state.value = State.Connecting
 
-        val newSession = openSession() ?: return false
+        repeat(START_ATTEMPTS) { attempt ->
+            val reason = startOnce() ?: run {
+                _state.value = State.Ready
+                return true
+            }
+            if (attempt == START_ATTEMPTS - 1) return fail(reason)
+            // Worth a second go, and cheap now that awaitStreaming() reports a
+            // stream that stopped rather than sitting out the whole timeout.
+            Log.w(TAG, "GlassesController: $reason; retrying from a fresh session")
+            release()
+        }
+        return false
+    }
+
+    /** Opens a session, attaches the camera and starts the stream once. */
+    private suspend fun startOnce(): String? {
+        lastError = null
+
+        val newSession = openSession() ?: return lastError ?: "createSession gave no session"
         session = newSession
         newSession.start()
 
-        if (!newSession.awaitStarted()) return fail("session never reached STARTED")
+        if (!newSession.awaitStarted()) return "session never reached STARTED"
 
-        val newCamera = attachCamera(newSession) ?: return false
+        val newCamera = attachCamera(newSession) ?: return lastError ?: "addCamera gave no camera"
         camera = newCamera
 
-        if (!startStream(newCamera)) return false
-        if (!newCamera.awaitStreaming()) return fail("stream never reached STREAMING")
+        if (!startStream(newCamera)) return lastError ?: "stream.start failed"
 
-        _state.value = State.Ready
-        return true
+        return newCamera.awaitStreaming()
     }
 
     /** Captures a single still, warming the session up first if needed. */
@@ -105,18 +125,27 @@ class GlassesController {
         }
     }
 
+    /**
+     * Drops the session and camera, and puts the state back to Idle along with
+     * them. The Ready fast path in [warmUpLocked] keys off the state alone, so
+     * leaving it Ready once these fields are null makes the next capture skip
+     * the rebuild and then find no stream - and the caller releases after every
+     * shot, because sessions are short-lived on purpose. [fail] assigns its own
+     * state after calling this.
+     */
     fun release() {
         runCatching { camera?.stop() }
         runCatching { session?.stop() }
         camera = null
         session = null
+        _state.value = State.Idle
     }
 
     private fun openSession(): DeviceSession? {
         var out: DeviceSession? = null
         Wearables.createSession(AutoDeviceSelector()).fold(
             onSuccess = { out = it },
-            onFailure = { error, _ -> fail("createSession: ${error.description}") },
+            onFailure = { error, _ -> lastError = "createSession: ${error.description}" },
         )
         return out
     }
@@ -129,7 +158,7 @@ class GlassesController {
             StreamConfiguration(videoQuality = VideoQuality.MEDIUM, frameRate = 15),
         ).fold(
             onSuccess = { out = it },
-            onFailure = { error, _ -> fail("addCamera: ${error.description}") },
+            onFailure = { error, _ -> lastError = "addCamera: ${error.description}" },
         )
         return out
     }
@@ -138,7 +167,7 @@ class GlassesController {
         var ok = false
         camera.stream.start().fold(
             onSuccess = { ok = true },
-            onFailure = { error, _ -> fail("stream.start: ${error.description}") },
+            onFailure = { error, _ -> lastError = "stream.start: ${error.description}" },
         )
         return ok
     }
@@ -156,12 +185,37 @@ class GlassesController {
                 .first { it == DeviceSessionState.STARTED }
         } != null
 
-    private suspend fun Camera.awaitStreaming(): Boolean =
-        withTimeoutOrNull(STREAM_TIMEOUT_MS) {
+    /**
+     * Returns null once streaming, or the reason it will not.
+     *
+     * A stream that gives up reports STOPPED rather than hanging, so waiting out
+     * the whole timeout after that only delays the failure and describes it
+     * wrongly. The first STOPPED is the pre-start value every StateFlow replays,
+     * so only one seen *after* the stream has moved counts as giving up - the
+     * mock does exactly that, within a second, when CAMERA is not granted.
+     */
+    private suspend fun Camera.awaitStreaming(): String? {
+        var moved = false
+        val reached = withTimeoutOrNull(STREAM_TIMEOUT_MS) {
             stream.state
                 .onEach { Log.d(TAG, "stream state -> $it") }
-                .first { it == StreamState.STREAMING }
-        } != null
+                .first { state ->
+                    when (state) {
+                        StreamState.STREAMING -> true
+                        StreamState.STOPPED, StreamState.CLOSED -> moved
+                        else -> {
+                            moved = true
+                            false
+                        }
+                    }
+                }
+        }
+        return when (reached) {
+            StreamState.STREAMING -> null
+            null -> "stream never reached STREAMING"
+            else -> "stream gave up before streaming (reached $reached)"
+        }
+    }
 
     /** Always returns false so callers can `return fail(...)`. */
     private fun fail(reason: String): Boolean {
@@ -172,6 +226,14 @@ class GlassesController {
     }
 
     private companion object {
+        /**
+         * A stream that gives up while starting is usually transient - a
+         * Bluetooth hiccup on real glasses, or MockDeviceKit's encoder failing
+         * to extract its codec config on an emulator - and a fresh session gets
+         * it on the second go. Two, so a genuinely dead camera still fails
+         * promptly rather than retrying its way through a long wait.
+         */
+        const val START_ATTEMPTS = 2
         const val SESSION_TIMEOUT_MS = 15_000L
         /** Starting a stream crosses Bluetooth Classic and negotiates a quality
          *  ladder. It took 6.5s on an emulator, so give real hardware room. */

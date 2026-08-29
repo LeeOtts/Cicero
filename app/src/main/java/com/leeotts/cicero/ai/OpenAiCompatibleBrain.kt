@@ -15,8 +15,9 @@ import kotlinx.serialization.json.putJsonObject
 /**
  * Any server speaking the OpenAI chat-completions API.
  *
- * One implementation covers LM Studio, Ollama, llama.cpp server, vLLM, LocalAI
- * and OpenRouter — they all expose /v1/chat/completions.
+ * One implementation covers LM Studio, Ollama, llama.cpp server and vLLM, plus
+ * every hosted provider that copied the shape: OpenAI, OpenRouter, xAI, Groq,
+ * DeepSeek and Mistral. They all expose /v1/chat/completions.
  *
  * Capability flags are constructor arguments because they are a property of the
  * loaded *model*, not the protocol: a 7B text model and a vision model behind
@@ -27,22 +28,32 @@ class OpenAiCompatibleBrain(
     baseUrl: String,
     private val model: String,
     private val apiKey: String = "",
+    /**
+     * Persisted into `Conversation.brainId`, so each hosted provider must pass
+     * its own. Sharing one id would silently merge an OpenAI thread with a Groq
+     * one, because the threading rule keys on it.
+     */
+    override val id: String = "openai-compatible",
+    /** Bearer for almost everyone; a parameter because "almost" is not "all". */
+    private val auth: AuthStyle = AuthStyle.BEARER,
+    /** Provider-specific extras, such as the OpenRouter attribution pair. */
+    private val extraHeaders: Map<String, String> = emptyMap(),
     override val supportsVision: Boolean = false,
     override val supportsTools: Boolean = true,
+    /**
+     * False for every self-hosted server, and for most hosted ones. OpenRouter
+     * is the exception: its ":online" model suffix runs a search server-side.
+     */
+    override val supportsWebSearch: Boolean = false,
     override val displayName: String = "Local ($model)",
 ) : Brain {
 
-    override val id = "openai-compatible"
     override val acceptsAudio = false
-
-    /** No OpenAI-compatible server offers a hosted search tool. */
-    override val supportsWebSearch = false
 
     // Accept a base url with or without a trailing /v1 so either can be pasted.
     private val root = baseUrl.trimEnd('/').removeSuffix("/v1")
 
-    private val authHeaders: Map<String, String> =
-        if (apiKey.isBlank()) emptyMap() else mapOf("Authorization" to "Bearer $apiKey")
+    private val authHeaders: Map<String, String> = auth.headers(apiKey) + extraHeaders
 
     override suspend fun respond(
         system: String,
@@ -173,7 +184,7 @@ class OpenAiCompatibleBrain(
     }
 
     override suspend fun testConnection(): Result<String> =
-        ModelCatalog.ids(root, apiKey, friendlyName = displayName).map { ids ->
+        ModelCatalog.ids(root, apiKey, auth, extraHeaders, displayName).map { ids ->
             when {
                 ids.isEmpty() -> "Reachable, but no models are loaded."
                 model in ids -> "Connected. Model $model is loaded."

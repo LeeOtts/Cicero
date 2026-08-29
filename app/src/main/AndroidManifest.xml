@@ -45,6 +45,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!--
+              Makes Cicero eligible as the phone's digital assistant, which is
+              what the long-press-power gesture launches. It lands on the Ask
+              screen, so there is nothing extra to handle.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
             <!-- Meta AI returns here after registration. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -54,14 +63,43 @@
             </intent-filter>
         </activity>
 
+        <!--
+          Catches the OpenRouter sign-in redirect and hands the code back to the
+          app. A separate activity, and a separate scheme, on purpose:
+
+          - The "cicero" filter above is scheme-only, so it matches EVERY
+            cicero:// URI. Putting the OAuth callback on that scheme would make
+            two components match and raise an app chooser mid-sign-in.
+          - MainActivity is launchMode="standard" and never reads its intent, so
+            routing through it would flash the whole UI in the middle of a flow.
+
+          The scheme is reverse-DNS per RFC 8252 section 7.1.
+        -->
+        <activity
+            android:name=".OAuthCallbackActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.leeotts.cicero" android:host="oauth" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".tools.ReminderReceiver"
             android:exported="false" />
 
         <!--
-          Notification Access is the only way to enumerate other apps' media
-          sessions, which is how playback control reaches Spotify and Audible.
-          The listener itself does nothing with notifications.
+          Notification Access does double duty. It is the only way to enumerate
+          other apps' media sessions, which is how playback control reaches
+          Spotify and Audible; and it is how incoming messages are captured for
+          read_messages, which covers SMS, WhatsApp and Messenger alike without
+          holding READ_SMS.
         -->
         <service
             android:name=".tools.CiceroNotificationListener"

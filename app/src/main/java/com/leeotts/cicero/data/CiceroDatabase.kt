@@ -7,6 +7,8 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Transaction
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
@@ -97,9 +99,21 @@ interface CiceroDao {
     suspend fun deleteNote(id: Long)
 }
 
+/**
+ * Adds Turn.brainId, so a thread records which model answered each turn rather
+ * than only which one it started with.
+ *
+ * Nullable, so existing rows need no default and simply read as unknown.
+ */
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE turns ADD COLUMN brainId TEXT")
+    }
+}
+
 @Database(
     entities = [Conversation::class, Turn::class, TurnFts::class, Note::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -114,7 +128,11 @@ abstract class CiceroDatabase : RoomDatabase() {
                 context.applicationContext,
                 CiceroDatabase::class.java,
                 "cicero.db",
-            ).build().also { instance = it }
+            )
+                // No destructive fallback: this database is the user's log, and
+                // losing it silently on an upgrade would be worse than crashing.
+                .addMigrations(MIGRATION_1_2)
+                .build().also { instance = it }
         }
     }
 }

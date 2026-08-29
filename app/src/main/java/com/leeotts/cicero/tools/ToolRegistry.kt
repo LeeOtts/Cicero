@@ -5,6 +5,7 @@ import com.leeotts.cicero.ai.Brain
 import com.leeotts.cicero.ai.Tool
 import com.leeotts.cicero.data.ConversationRepository
 import com.leeotts.cicero.glasses.GlassesController
+import com.leeotts.cicero.home.NestGateway
 import com.leeotts.cicero.location.DestinationLog
 import com.leeotts.cicero.location.LocationProvider
 
@@ -23,6 +24,7 @@ object ToolRegistry {
         location: LocationProvider,
         destinations: DestinationLog,
         brain: Brain,
+        nest: NestGateway,
     ): List<Tool> = buildList {
         if (brain.supportsVision) add(LookTool(glasses))
         add(SetAlarmTool(context))
@@ -36,5 +38,14 @@ object ToolRegistry {
         add(WhereAmITool(context, location))
         add(NavigateTool(context, destinations))
         add(FindNearbyTool(context, location, destinations))
+        // Appended rather than grouped with the other context tools: the list
+        // order is a cache key, so new tools go on the end.
+        add(ReadMessagesTool(context))
+        // Offered even with no Nest account configured. They answer that in
+        // words, the way MediaControlTool answers a missing Notification
+        // Access - and dropping them instead would rewrite the cached prompt
+        // prefix every time the credentials are edited.
+        add(GetThermostatTool(nest))
+        add(SetThermostatTool(nest))
     }
 }

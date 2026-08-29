@@ -233,7 +233,8 @@ class ClaudeBrain(
         /** Cheaper and much faster; a sensible pick for a voice assistant. */
         const val FAST_MODEL = "claude-haiku-4-5"
         const val BASE = "https://api.anthropic.com"
-        private const val API_VERSION = "2023-06-01"
+        /** Not private: [AuthStyle.X_API_KEY] sends this alongside the key. */
+        const val API_VERSION = "2023-06-01"
         private const val MAX_TOKENS = 4096
 
         /** Dynamic-filtering variant; needs Opus 4.6 / Sonnet 4.6 or newer. */

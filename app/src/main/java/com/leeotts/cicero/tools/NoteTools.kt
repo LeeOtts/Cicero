@@ -1,6 +1,5 @@
 package com.leeotts.cicero.tools
 
-import android.service.notification.NotificationListenerService
 import com.leeotts.cicero.ai.Image
 import com.leeotts.cicero.ai.Tool
 import com.leeotts.cicero.ai.ToolOutcome
@@ -12,13 +11,6 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-/**
- * Exists only so the system will grant Notification Access, which is the gate
- * for enumerating other apps' media sessions. It intentionally does nothing
- * with the notifications themselves.
- */
-class CiceroNotificationListener : NotificationListenerService()
 
 class SaveNoteTool(
     private val repository: ConversationRepository,

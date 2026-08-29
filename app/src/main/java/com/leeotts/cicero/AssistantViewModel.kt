@@ -1,10 +1,12 @@
 package com.leeotts.cicero
 
+import android.app.Activity
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.leeotts.cicero.ai.Assistant
+import com.leeotts.cicero.ai.Brain
 import com.leeotts.cicero.ai.BrainConfig
 import com.leeotts.cicero.ai.BrainException
 import com.leeotts.cicero.ai.BrainFactory
@@ -12,10 +14,18 @@ import com.leeotts.cicero.ai.BrainSettings
 import com.leeotts.cicero.ai.ModelCatalog
 import com.leeotts.cicero.ai.ModelList
 import com.leeotts.cicero.ai.Msg
+import com.leeotts.cicero.ai.Provider
+import com.leeotts.cicero.ai.Providers
+import com.leeotts.cicero.ai.Router
+import com.leeotts.cicero.ai.TaskRole
+import com.leeotts.cicero.ai.oauth.OAuthResult
+import com.leeotts.cicero.ai.oauth.OpenRouterAuth
+import com.leeotts.cicero.audio.Speaker
 import com.leeotts.cicero.data.Conversation
 import com.leeotts.cicero.data.ConversationRepository
 import com.leeotts.cicero.data.Role
 import com.leeotts.cicero.data.Turn
+import com.leeotts.cicero.home.NestConfig
 import com.leeotts.cicero.tools.ToolRegistry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,6 +52,16 @@ sealed interface TestResult {
     data class Failed(val message: String) : TestResult
 }
 
+/** How far through an OpenRouter sign-in the user is. */
+sealed interface OAuthState {
+    data object Idle : OAuthState
+
+    /** The browser has the foreground. There is no callback for giving up here. */
+    data object Waiting : OAuthState
+    data object Exchanging : OAuthState
+    data class Failed(val message: String) : OAuthState
+}
+
 class AssistantViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settings = BrainSettings(app)
@@ -50,6 +70,18 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     private val glasses = getApplication<CiceroApp>().glasses
     private val location = getApplication<CiceroApp>().location
     private val destinations = getApplication<CiceroApp>().destinations
+    private val nest = getApplication<CiceroApp>().nest
+    private val speaker = Speaker(app)
+    private val auth = OpenRouterAuth(settings)
+
+    init {
+        // Replayed, because the app is often killed while the browser is in
+        // front: the callback activity can run before this ViewModel exists.
+        viewModelScope.launch { OAuthResult.codes.collect(::onAuthCode) }
+    }
+
+    /** True while an answer is being read aloud. */
+    val speaking: StateFlow<Boolean> = speaker.speaking
 
     val config: StateFlow<BrainConfig> = settings.config
         .stateIn(viewModelScope, SharingStarted.Eagerly, BrainConfig())
@@ -78,17 +110,51 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     private val _testResult = MutableStateFlow<TestResult?>(null)
     val testResult: StateFlow<TestResult?> = _testResult.asStateFlow()
 
-    private val localProbe = ModelProbe()
+    val nestConfig: StateFlow<NestConfig> = nest.config
+        .stateIn(viewModelScope, SharingStarted.Eagerly, NestConfig())
+
+    /**
+     * Its own slot rather than sharing [testResult]: the two Test buttons sit on
+     * the same screen, and one answer landing under the other button is worse
+     * than no answer at all.
+     */
+    private val _nestTestResult = MutableStateFlow<TestResult?>(null)
+    val nestTestResult: StateFlow<TestResult?> = _nestTestResult.asStateFlow()
+
+    /**
+     * One probe per provider, because the routing section shows several pickers
+     * at once and each is looking at a different endpoint.
+     */
+    private val probes = mutableMapOf<String, ModelProbe>()
     private val whisperProbe = ModelProbe()
 
-    val localModels: StateFlow<ModelList> = localProbe.state.asStateFlow()
     val whisperModels: StateFlow<ModelList> = whisperProbe.state.asStateFlow()
+
+    private val _oauth = MutableStateFlow<OAuthState>(OAuthState.Idle)
+    val oauth: StateFlow<OAuthState> = _oauth.asStateFlow()
 
     /** In-memory history for follow-ups within the current thread. */
     private var history: List<Msg> = emptyList()
 
     fun update(transform: (BrainConfig) -> BrainConfig) {
         viewModelScope.launch { settings.update(transform) }
+    }
+
+    fun updateNest(transform: (NestConfig) -> NestConfig) {
+        viewModelScope.launch { nest.update(transform) }
+    }
+
+    fun testNest() {
+        if (_busy.value) return
+        viewModelScope.launch {
+            _busy.value = true
+            _nestTestResult.value = TestResult.Running
+            _nestTestResult.value = nest.test().fold(
+                onSuccess = { TestResult.Ok("Connected — $it") },
+                onFailure = { TestResult.Failed("Failed — ${it.message}") },
+            )
+            _busy.value = false
+        }
     }
 
     /**
@@ -100,16 +166,18 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
      */
     private inner class ModelProbe {
         val state = MutableStateFlow<ModelList>(ModelList.Idle)
-        private var probedUrl: String? = null
+        private var probed: String? = null
 
-        fun load(url: String, apiKey: String, force: Boolean) {
+        fun load(provider: Provider, url: String, apiKey: String, force: Boolean) {
             if (url.isBlank() || state.value == ModelList.Loading) return
-            if (!force && url == probedUrl && state.value is ModelList.Loaded) return
+            // Keyed on both, because the self-hosted entry can be re-pointed.
+            val key = "${provider.id}@$url"
+            if (!force && key == probed && state.value is ModelList.Loaded) return
 
-            probedUrl = url
+            probed = key
             viewModelScope.launch {
                 state.value = ModelList.Loading
-                state.value = ModelCatalog.ids(url, apiKey).fold(
+                state.value = ModelCatalog.list(provider, url, apiKey).fold(
                     onSuccess = { ModelList.Loaded(it) },
                     onFailure = { ModelList.Failed(it.message ?: "Couldn't reach the server.") },
                 )
@@ -117,14 +185,69 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun loadLocalModels(force: Boolean = false) {
+    /** The model list for one provider's picker. */
+    fun models(providerId: String): StateFlow<ModelList> =
+        probes.getOrPut(providerId) { ModelProbe() }.state.asStateFlow()
+
+    fun loadModels(providerId: String, force: Boolean = false) {
         val cfg = config.value
-        localProbe.load(cfg.localBaseUrl, cfg.localKey, force)
+        val provider = Providers.byId(providerId)
+        probes.getOrPut(providerId) { ModelProbe() }
+            .load(provider, cfg.baseUrlFor(provider), cfg.keyFor(provider.id), force)
     }
 
     /** The Whisper endpoint takes no key of its own today, hence the blank one. */
     fun loadWhisperModels(force: Boolean = false) {
-        whisperProbe.load(config.value.speechUrl, apiKey = "", force = force)
+        whisperProbe.load(Providers.LOCAL, config.value.speechUrl, apiKey = "", force = force)
+    }
+
+    // --- OpenRouter sign-in -------------------------------------------------
+
+    fun signIn(activity: Activity) {
+        viewModelScope.launch {
+            _oauth.value = OAuthState.Waiting
+            runCatching { auth.begin(activity) }.onFailure {
+                _oauth.value = OAuthState.Failed(it.message ?: "Could not open a browser.")
+            }
+        }
+    }
+
+    /**
+     * A Custom Tab has no cancel callback - backing out of it delivers nothing
+     * at all. So Settings reports when it returns to the front, and a sign-in
+     * still marked [OAuthState.Waiting] is one the user walked away from.
+     */
+    fun oauthResumed() {
+        if (_oauth.value != OAuthState.Waiting) return
+        // A code may already be delivered and not yet collected. That is not a
+        // cancel, and clearing the verifier here would break the exchange.
+        if (OAuthResult.codes.replayCache.isNotEmpty()) return
+        _oauth.value = OAuthState.Idle
+        viewModelScope.launch { settings.clearPendingAuth() }
+    }
+
+    private suspend fun onAuthCode(code: String?) {
+        OAuthResult.clear()
+        if (code == null) {
+            settings.clearPendingAuth()
+            if (_oauth.value == OAuthState.Waiting) {
+                _oauth.value = OAuthState.Failed("Sign-in was cancelled.")
+            }
+            return
+        }
+        _oauth.value = OAuthState.Exchanging
+        _oauth.value = runCatching { auth.complete(code) }.fold(
+            onSuccess = { key ->
+                settings.update { cfg ->
+                    cfg.copy(
+                        providerId = Providers.OPENROUTER.id,
+                        keys = cfg.keys + (Providers.OPENROUTER.id to key),
+                    )
+                }
+                OAuthState.Idle
+            },
+            onFailure = { OAuthState.Failed(it.message ?: "Sign-in failed.") },
+        )
     }
 
     fun testConnection() {
@@ -145,32 +268,34 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _busy.value = true
             val cfg = config.value
-            val brain = BrainFactory.brain(cfg)
+            val routing = Router.route(cfg, question, history.size)
+            var brain = BrainFactory.brain(cfg, routing.target)
             val now = System.currentTimeMillis()
 
-            val conversationId = repository.conversationFor(now, brain.id)
+            // Threaded on the provider the USER chose, never the one routing
+            // picked: routing changes model turn to turn, and keying on that
+            // would split one conversation into a string of one-turn threads.
+            val conversationId = repository.conversationFor(now, cfg.providerId)
             val isFirstTurn = history.isEmpty()
             repository.addTurn(conversationId, Role.USER, question, now = now)
-
-            val assistant = Assistant(
-                brain = brain,
-                transcriber = BrainFactory.transcriber(cfg, brain),
-                tools = ToolRegistry.build(
-                    context = getApplication(),
-                    repository = repository,
-                    glasses = glasses,
-                    location = location,
-                    destinations = destinations,
-                    brain = brain,
-                ),
-            )
 
             val priorMessages = history.size
             var failed = false
             var photo: ByteArray? = null
             var newMessages: List<Msg> = emptyList()
             val answer = try {
-                val result = assistant.ask(text = question, priorHistory = history)
+                val result = try {
+                    assistantFor(cfg, brain).ask(text = routing.text, priorHistory = history)
+                } catch (e: BrainException) {
+                    // Routing chose this model, not the user, so its failure must
+                    // not become the user's problem. One retry against their own
+                    // choice - there is no HTTP retry layer to lean on.
+                    val fallback = cfg.defaultTarget()
+                    if (!cfg.routingEnabled || fallback == routing.target) throw e
+                    Log.w(TAG, "routed brain ${brain.id} failed; falling back", e)
+                    brain = BrainFactory.brain(cfg, fallback)
+                    assistantFor(cfg, brain).ask(text = routing.text, priorHistory = history)
+                }
                 history = result.history
                 newMessages = result.history.drop(priorMessages)
                 photo = result.photo?.bytes
@@ -184,25 +309,58 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 "Something went wrong: ${e.message}"
             }
 
+            // Spoken before the database writes so the glasses answer at the
+            // speed of the model, not the speed of Room. Failures are spoken
+            // too - silence is the worst outcome when the phone is in a pocket.
+            speaker.speak(answer)
+
             // Logged before the answer so the thread reads in the order things
             // happened.
-            recordToolTurns(conversationId, newMessages)
+            recordToolTurns(conversationId, newMessages, brain.id)
 
             repository.addTurn(
                 conversationId,
                 Role.ASSISTANT,
                 answer,
                 photoJpeg = photo,
+                brainId = brain.id,
                 now = System.currentTimeMillis(),
             )
             if (isFirstTurn) {
-                repository.ensureTitled(conversationId, BrainFactory.titler(cfg), question)
+                repository.ensureTitled(
+                    conversationId,
+                    BrainFactory.brainFor(cfg, TaskRole.TITLE),
+                    question,
+                )
             }
 
             _exchanges.value = _exchanges.value +
                 Exchange(question, answer, brain.displayName, isError = failed)
             _busy.value = false
         }
+    }
+
+    /** Everything a turn needs around one brain, so a fallback can rebuild it. */
+    private fun assistantFor(cfg: BrainConfig, brain: Brain) = Assistant(
+        brain = brain,
+        transcriber = BrainFactory.transcriber(cfg, brain),
+        tools = ToolRegistry.build(
+            context = getApplication(),
+            repository = repository,
+            glasses = glasses,
+            location = location,
+            destinations = destinations,
+            brain = brain,
+            nest = nest.gateway,
+        ),
+    )
+
+    /** Cuts off an answer mid-sentence, for when it is long or unwanted. */
+    fun stopSpeaking() = speaker.stop()
+
+    override fun onCleared() {
+        speaker.shutdown()
+        super.onCleared()
     }
 
     /**
@@ -215,7 +373,11 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
      * Timestamps are stepped because several tools can run inside one
      * millisecond.
      */
-    private suspend fun recordToolTurns(conversationId: Long, messages: List<Msg>) {
+    private suspend fun recordToolTurns(
+        conversationId: Long,
+        messages: List<Msg>,
+        brainId: String,
+    ) {
         val results = messages.filterIsInstance<Msg.ToolResult>()
         if (results.isEmpty()) return
 
@@ -230,6 +392,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 Role.TOOL,
                 text = "${result.name}: ${result.content}".take(TOOL_TEXT_LIMIT),
                 toolCallsJson = arguments[result.callId],
+                brainId = brainId,
                 now = stamp++,
             )
         }

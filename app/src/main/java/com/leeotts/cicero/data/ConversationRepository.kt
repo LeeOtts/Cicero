@@ -28,9 +28,14 @@ class ConversationRepository(context: Context) {
      * Returns the thread a turn arriving at [now] belongs to.
      *
      * Threading rule: a turn joins the current thread if it lands within
-     * [THREAD_WINDOW_MS] of the last one AND the same backend is answering.
-     * Otherwise it opens a new thread. The backend check matters because
-     * switching models mid-thread would make the log misleading to compare.
+     * [THREAD_WINDOW_MS] of the last one AND the same backend is selected.
+     * Otherwise it opens a new thread.
+     *
+     * [brainId] is the provider the *user* chose, not the one that answered.
+     * Those differ once per-task routing is on, and keying on the answering
+     * model would split a single conversation into one-turn threads every time
+     * a follow-up routed differently. Which model actually answered is recorded
+     * per turn instead, on [Turn.brainId].
      */
     suspend fun conversationFor(now: Long, brainId: String): Long {
         val latest = dao.latestConversation()
@@ -51,6 +56,7 @@ class ConversationRepository(context: Context) {
         text: String,
         photoJpeg: ByteArray? = null,
         toolCallsJson: String? = null,
+        brainId: String? = null,
         now: Long,
     ): Long {
         val path = photoJpeg?.let { savePhoto(it, now) }
@@ -61,6 +67,7 @@ class ConversationRepository(context: Context) {
                 text = text,
                 photoPath = path,
                 toolCallsJson = toolCallsJson,
+                brainId = brainId,
                 createdAt = now,
             )
         )

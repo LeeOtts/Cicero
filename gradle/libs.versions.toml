@@ -15,6 +15,8 @@ datastore = "1.1.1"
 room = "2.7.1"
 ksp = "2.2.0-2.0.2"
 coreSplashscreen = "1.0.1"
+# Custom Tabs, for the OpenRouter OAuth sign-in.
+browser = "1.8.0"
 # NOTE: the compose-bom pin above does NOT hold, and this comment used to claim
 # otherwise. mwdat-core 0.9.0 pulls androidx.core 1.16.0, which drags lifecycle
 # to 2.9.4 and Compose to 1.9.0 by conflict resolution - verified with
@@ -51,6 +53,7 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 
 maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "maplibre" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
@@ -62,8 +65,12 @@ mwdat-mockdevice = { group = "com.meta.wearable", name = "mwdat-mockdevice", ver
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version = "1.9.0" }
+# The JVM-only half of DataStore, so the settings migration is unit-testable.
+androidx-datastore-preferences-core = { group = "androidx.datastore", name = "datastore-preferences-core", version.ref = "datastore" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+# MigrationTestHelper, so a schema bump is proved rather than hoped for.
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

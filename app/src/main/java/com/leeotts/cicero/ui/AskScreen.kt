@@ -16,8 +16,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -46,9 +48,11 @@ import com.leeotts.cicero.ui.theme.Space
 fun AskScreen(
     exchanges: List<Exchange>,
     busy: Boolean,
+    speaking: Boolean,
     backendLabel: String,
     onAsk: (String) -> Unit,
     onClear: () -> Unit,
+    onStopSpeaking: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var question by remember { mutableStateOf("") }
@@ -116,6 +120,16 @@ fun AskScreen(
                     shape = RoundedCornerShape(Radius.bubble),
                     modifier = Modifier.weight(1f),
                 )
+                // Only while there is something to cut off - an answer read
+                // through the glasses can run longer than the user wants.
+                if (speaking) {
+                    FilledTonalIconButton(onClick = onStopSpeaking) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.VolumeOff,
+                            contentDescription = stringResource(R.string.ask_stop_speaking),
+                        )
+                    }
+                }
                 FilledIconButton(
                     onClick = { onAsk(question); question = "" },
                     enabled = !busy && question.isNotBlank(),

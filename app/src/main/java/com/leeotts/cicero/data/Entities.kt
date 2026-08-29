@@ -36,6 +36,14 @@ data class Turn(
     val photoPath: String? = null,
     val audioPath: String? = null,
     val toolCallsJson: String? = null,
+    /**
+     * Which backend produced this turn, for ASSISTANT and TOOL rows.
+     *
+     * Turn-level rather than thread-level because routing can hand a single
+     * thread to more than one model. Null on USER turns, which no model wrote,
+     * and on every row written before this column existed.
+     */
+    val brainId: String? = null,
     val createdAt: Long,
 )
 
