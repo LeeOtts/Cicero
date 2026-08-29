@@ -99,16 +99,14 @@ Nine providers are offered, in this order:
 | Mistral | https://console.mistral.ai/api-keys |
 | Local | no key — point it at your own server |
 
-**OpenRouter is the path to take first.** It is the only provider you sign into rather than
-paste a key for: a Custom Tab, a PKCE exchange, and Cicero holds a real, revocable
-OpenRouter key that reaches every model above and several hundred more. On a fresh install
-it offers *only* sign-in; the key field appears afterwards so you can see or replace what
-sign-in produced.
+**OpenRouter is the path to take first.** It's the only provider you sign into rather than
+paste a key for — a Custom Tab, a PKCE exchange, and Cicero holds a real, revocable
+OpenRouter key that reaches every model above and several hundred more. Sign-in shows first;
+the key field appears afterward so you can see or replace what it produced.
 
-The reason it is the headline path is worth stating plainly: a consumer Claude or ChatGPT
-subscription cannot legitimately authorise a third-party app. Anthropic forbids it outright
-and Google closed the same door on Gemini CLI. Pay-as-you-go API credit is the honest
-option, and OpenRouter is the least painful way to buy it once.
+A consumer Claude or ChatGPT subscription can't authorize a third-party app — Anthropic
+forbids it, and Google closed the same door on Gemini CLI. Pay-as-you-go API credit is the
+alternative, and OpenRouter is the least painful way to buy it once.
 
 A few things Settings does that are not obvious:
 
@@ -135,21 +133,18 @@ A few things Settings does that are not obvious:
 
 #### Optional: bake a Gemini key in at build time
 
-If you want a locally built APK to work before you have typed anything, Gemini — and only
-Gemini — can be seeded from the build:
+Gemini is the only provider that can be seeded from the build, so a locally built APK works
+before you've typed anything in Settings:
 
 ```bash
 echo "gemini_api_key=YOUR_KEY" >> local.properties
 ```
 
-A `GEMINI_API_KEY` environment variable wins over `local.properties` when both are set.
-This step is entirely optional: with neither present the value compiles to an empty string,
-the build still succeeds, and the app simply starts with no Gemini key. A key entered in
-Settings always beats the baked-in one.
+A `GEMINI_API_KEY` environment variable wins over `local.properties`; a key entered in
+Settings beats both. Optional — leave both unset and the build still succeeds, with no key.
 
-Be aware of what it costs you. A key baked in this way sits in the APK in cleartext and
-gets none of the Keystore protection above, so use it for convenience and not for a key you
-care about.
+This key sits in the APK in cleartext, with none of the Keystore protection above. Use it
+for convenience, not for a key you care about.
 
 ### 3. Meta AI app + glasses
 
