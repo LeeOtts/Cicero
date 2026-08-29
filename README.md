@@ -127,6 +127,10 @@ A few things Settings does that are not obvious:
   `http://localhost:1234`. It works against LM Studio, Ollama, llama.cpp or vLLM — anything
   that speaks the OpenAI chat-completions shape — and needs no key at all: an empty key
   field simply sends no `Authorization` header, which is what those servers expect anyway.
+  The address is just that field, so a phone off your home Wi-Fi still reaches it over
+  [Tailscale](https://tailscale.com) — put phone and machine on the same tailnet and point
+  Local at `http://<machine>:<port>` instead of a LAN IP. Encrypted end to end, no port
+  forwarding.
 - **A speech-to-text section appears for every provider except Gemini**, which is the only
   one that takes raw audio. It points at a Whisper-compatible endpoint. Nothing captures
   audio yet, so it has no effect today — it is there for when voice input lands.
