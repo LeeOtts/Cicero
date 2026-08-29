@@ -6,6 +6,8 @@ import com.leeotts.cicero.ai.ToolOutcome
 import com.leeotts.cicero.ai.ToolSpec
 import com.leeotts.cicero.data.ConversationRepository
 import com.leeotts.cicero.glasses.GlassesController
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
@@ -89,7 +91,9 @@ class LookTool(private val glasses: GlassesController) : Tool {
         val bitmap = try {
             glasses.capture()
         } finally {
-            glasses.release()
+            // NonCancellable so a cancelled assistant turn still closes the
+            // session - an open one suspends Meta AI's own features.
+            withContext(NonCancellable) { glasses.release() }
         } ?: return ToolOutcome(
             "I could not get a picture from the glasses. " +
                 "They may be disconnected, folded, or not being worn.",

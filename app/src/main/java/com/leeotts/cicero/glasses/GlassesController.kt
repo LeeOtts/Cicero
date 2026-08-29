@@ -14,11 +14,15 @@ import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.selectors.AutoDeviceSelector
 import com.meta.wearable.dat.core.session.DeviceSession
 import com.meta.wearable.dat.core.session.DeviceSessionState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -50,6 +54,14 @@ class GlassesController {
      *  the assistant's look tool and the Glasses screen's shutter button. */
     private val lock = Mutex()
 
+    /**
+     * Teardown that outlives its caller. ViewModel.onCleared() cannot suspend
+     * and its own scope is already cancelled by then, so [releaseAsync] needs a
+     * scope of its own. Main.immediate keeps the DAT calls on the thread every
+     * other caller makes them from.
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     private var session: DeviceSession? = null
     private var camera: Camera? = null
 
@@ -58,24 +70,33 @@ class GlassesController {
     private var lastError: String? = null
 
     /** Opens a session and drives the stream to STREAMING so [capture] is instant. */
-    suspend fun warmUp(): Boolean = lock.withLock { warmUpLocked() }
+    suspend fun warmUp(): Boolean = lock.withLock { warmUpLocked() != null }
 
-    private suspend fun warmUpLocked(): Boolean {
-        if (_state.value is State.Ready) return true
-        _state.value = State.Connecting
+    /**
+     * Returns the streaming camera, or null having set [state] to Failed.
+     *
+     * Handing the camera back rather than a Boolean is what keeps [capture]
+     * from having to look one up that might have gone: Ready and a live camera
+     * are the same fact, and only this function may decide it holds.
+     */
+    private suspend fun warmUpLocked(): Camera? {
+        // releaseLocked() clears the state along with the fields, so a Ready
+        // with no camera is a bug rather than a session worth reusing.
+        camera?.let { if (_state.value is State.Ready) return it }
 
         repeat(START_ATTEMPTS) { attempt ->
+            _state.value = State.Connecting
             val reason = startOnce() ?: run {
                 _state.value = State.Ready
-                return true
+                return camera
             }
             if (attempt == START_ATTEMPTS - 1) return fail(reason)
             // Worth a second go, and cheap now that awaitStreaming() reports a
             // stream that stopped rather than sitting out the whole timeout.
             Log.w(TAG, "GlassesController: $reason; retrying from a fresh session")
-            release()
+            releaseLocked()
         }
-        return false
+        return null
     }
 
     /** Opens a session, attaches the camera and starts the stream once. */
@@ -98,14 +119,10 @@ class GlassesController {
 
     /** Captures a single still, warming the session up first if needed. */
     suspend fun capture(): AndroidBitmap? = lock.withLock {
-        if (!warmUpLocked()) return@withLock null
-        val stream = camera?.stream ?: run {
-            fail("camera stream went away")
-            return@withLock null
-        }
+        val camera = warmUpLocked() ?: return@withLock null
 
         var out: AndroidBitmap? = null
-        stream.capturePhoto().fold(
+        camera.stream.capturePhoto().fold(
             onSuccess = { photo -> out = photo.toBitmap() },
             onFailure = { error, _ -> Log.e(TAG, "capturePhoto: ${error.description}") },
         )
@@ -126,14 +143,32 @@ class GlassesController {
     }
 
     /**
-     * Drops the session and camera, and puts the state back to Idle along with
-     * them. The Ready fast path in [warmUpLocked] keys off the state alone, so
-     * leaving it Ready once these fields are null makes the next capture skip
-     * the rebuild and then find no stream - and the caller releases after every
-     * shot, because sessions are short-lived on purpose. [fail] assigns its own
-     * state after calling this.
+     * Drops the session and camera.
+     *
+     * Suspends so it can take the same lock as [capture]. This instance is
+     * shared process-wide and both callers release in a finally, so an unlocked
+     * teardown could close the session the other one is mid-capture on.
      */
-    fun release() {
+    suspend fun release() = lock.withLock { releaseLocked() }
+
+    /**
+     * Teardown for callers that cannot suspend - ViewModel.onCleared(), whose
+     * own scope is already cancelled. Fire-and-forget by nature: nothing is
+     * left to report to.
+     */
+    fun releaseAsync() {
+        scope.launch { release() }
+    }
+
+    /**
+     * The teardown itself, for code already holding the lock.
+     *
+     * The state goes back to Idle with the fields it describes. Leaving it at
+     * Ready once these are null is what let the next capture skip the rebuild
+     * and then find no stream - every shot after the first, since callers
+     * release after each one. [fail] assigns its own state after calling this.
+     */
+    private fun releaseLocked() {
         runCatching { camera?.stop() }
         runCatching { session?.stop() }
         camera = null
@@ -217,12 +252,12 @@ class GlassesController {
         }
     }
 
-    /** Always returns false so callers can `return fail(...)`. */
-    private fun fail(reason: String): Boolean {
+    /** Always returns null so callers can `return fail(...)`. */
+    private fun fail(reason: String): Nothing? {
         Log.e(TAG, "GlassesController: $reason")
-        release()
+        releaseLocked()
         _state.value = State.Failed(reason)
-        return false
+        return null
     }
 
     private companion object {

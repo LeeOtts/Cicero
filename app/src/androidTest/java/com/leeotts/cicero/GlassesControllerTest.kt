@@ -9,6 +9,7 @@ import com.leeotts.cicero.glasses.GlassesController
 import com.leeotts.cicero.glasses.MockGlassesSupport
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -109,6 +110,31 @@ class GlassesControllerTest {
                 "second capture returned null; state was ${controller.state.value}",
                 second,
             )
+        } finally {
+            controller.release()
+        }
+    }
+
+    /**
+     * warmUp() exists so the wake word can open the session speculatively and
+     * the capture that follows is instant. That only pays off if capture()
+     * reuses what warmUp() built instead of opening a second session, so the
+     * Ready state has to survive across the two calls.
+     */
+    @Test
+    fun warmUpThenCaptureReusesTheSession() = runBlocking {
+        MockGlassesSupport.enable(context)
+
+        val controller = GlassesController()
+        try {
+            assertTrue(
+                "warmUp() failed; state was ${controller.state.value}",
+                controller.warmUp(),
+            )
+            assertEquals(GlassesController.State.Ready, controller.state.value)
+
+            assertNotNull("capture() after warmUp() returned null", controller.capture())
+            assertEquals(GlassesController.State.Ready, controller.state.value)
         } finally {
             controller.release()
         }

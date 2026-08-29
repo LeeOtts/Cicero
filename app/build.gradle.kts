@@ -73,6 +73,12 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // MigrationTestHelper loads the exported schemas from the test APK's assets
+    // rather than from the ksp output directory below, so they have to be
+    // packaged into androidTest too - without this every migration test fails
+    // with "Cannot find the schema file in the assets folder".
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 }
 
 // Room schemas are exported and committed so a future version bump can be given

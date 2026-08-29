@@ -12,6 +12,7 @@ import com.leeotts.cicero.glasses.MockGlassesSupport
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.types.PermissionStatus
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -109,8 +110,10 @@ class GlassesViewModel(app: Application) : AndroidViewModel(app) {
                 }
             } finally {
                 // Sessions are short-lived on purpose: holding one open suspends
-                // Meta AI's own features on the glasses.
-                glasses.release()
+                // Meta AI's own features on the glasses. NonCancellable because
+                // release() now suspends on the controller's lock, and a
+                // cancelled scope would skip the teardown entirely.
+                withContext(NonCancellable) { glasses.release() }
                 _busy.value = false
             }
         }
@@ -118,7 +121,9 @@ class GlassesViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The single owner of teardown, now that the controller outlives the Activity. */
     override fun onCleared() {
-        glasses.release()
+        // Async because release() suspends on the controller's lock and this
+        // cannot: viewModelScope is already cancelled by the time we get here.
+        glasses.releaseAsync()
         super.onCleared()
     }
 }
