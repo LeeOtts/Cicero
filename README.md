@@ -5,7 +5,8 @@ Meta Wearables Device Access Toolkit (DAT).
 
 It is not tied to one model vendor. Nine backends ship in the catalog, the one you pick in
 Settings answers your questions, and per-task routing can send different kinds of turn to
-different models entirely.
+different models entirely. One of those nine is "Local" — point Cicero at LM Studio, Ollama,
+llama.cpp or vLLM on your own network and it never has to leave the house.
 
 Full design and phase plan: `~/.claude/plans/i-want-to-make-cheeky-papert.md`
 
@@ -96,7 +97,7 @@ Nine providers are offered, in this order:
 | DeepSeek | https://platform.deepseek.com/api_keys |
 | Groq | https://console.groq.com/keys |
 | Mistral | https://console.mistral.ai/api-keys |
-| Local | any OpenAI-compatible server — LM Studio, Ollama, llama.cpp, vLLM |
+| Local | no key — point it at your own server |
 
 **OpenRouter is the path to take first.** It is the only provider you sign into rather than
 paste a key for: a Custom Tab, a PKCE exchange, and Cicero holds a real, revocable
@@ -124,6 +125,10 @@ A few things Settings does that are not obvious:
   Opening a question with "ask Claude…" or "use Gemini…" overrides it for that turn.
 - **DeepSeek, Groq and Local are declared text-only**, so selecting one silently drops the
   glasses camera tool. Local has a vision toggle for a server that can in fact see.
+- **Local is the only provider with an editable address**, defaulting to LM Studio's own
+  `http://localhost:1234`. It works against LM Studio, Ollama, llama.cpp or vLLM — anything
+  that speaks the OpenAI chat-completions shape — and needs no key at all: an empty key
+  field simply sends no `Authorization` header, which is what those servers expect anyway.
 - **A speech-to-text section appears for every provider except Gemini**, which is the only
   one that takes raw audio. It points at a Whisper-compatible endpoint. Nothing captures
   audio yet, so it has no effect today — it is there for when voice input lands.
