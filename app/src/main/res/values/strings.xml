@@ -22,6 +22,8 @@
     <string name="ask_send">Ask</string>
     <string name="ask_new_thread">New thread</string>
     <string name="ask_stop_speaking">Stop speaking</string>
+    <string name="ask_start_listening">Ask by voice</string>
+    <string name="ask_stop_listening">Stop listening</string>
     <string name="ask_thinking">Thinking\u2026</string>
 
     <!-- which backend is answering -->

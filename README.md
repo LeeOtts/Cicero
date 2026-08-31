@@ -17,8 +17,11 @@ intercepted, and on non-display glasses the temple captouch is reserved by the s
 (tap = pause/resume, tap-and-hold = stop). The intent is to run **our own** wake phrase
 alongside Meta's and answer with a model you chose.
 
-That wake phrase is not built yet, and neither is voice capture: today you type a question
-on the Ask screen and Cicero speaks the answer back through Android text-to-speech.
+That wake phrase is not built yet. Voice input is, but only through the **phone's**
+microphone: the mic button on the Ask screen transcribes as you speak, straight into the
+question field, where it stays editable and is never sent on your behalf. Answers come
+back through Android text-to-speech. Capturing speech through the glasses themselves is a
+separate problem — it needs the Bluetooth HFP route, and is not built.
 
 ## What it can do
 
@@ -132,8 +135,10 @@ A few things Settings does that are not obvious:
   Local at `http://<machine>:<port>` instead of a LAN IP. Encrypted end to end, no port
   forwarding.
 - **A speech-to-text section appears for every provider except Gemini**, which is the only
-  one that takes raw audio. It points at a Whisper-compatible endpoint. Nothing captures
-  audio yet, so it has no effect today — it is there for when voice input lands.
+  one that takes raw audio. It points at a Whisper-compatible endpoint, and still has no
+  effect today: the Ask screen's mic button transcribes on the phone, through Android's own
+  recognizer, and never sends audio anywhere. This endpoint is for the glasses microphone,
+  which does not capture yet.
 
 #### Optional: bake a Gemini key in at build time
 
