@@ -74,6 +74,14 @@ android {
         buildConfig = true
     }
 
+    // The wake-word models are mmap'd straight out of the APK. AGP compresses
+    // assets by default, and a compressed asset has no file descriptor to map -
+    // AssetManager.openFd() refuses it at runtime, long after a green build.
+    // Leave .tflite stored.
+    androidResources {
+        noCompress += "tflite"
+    }
+
     // MigrationTestHelper loads the exported schemas from the test APK's assets
     // rather than from the ksp output directory below, so they have to be
     // packaged into androidTest too - without this every migration test fails
@@ -100,6 +108,8 @@ dependencies {
 
     implementation(libs.maplibre.android)
     implementation(libs.play.services.location)
+
+    implementation(libs.tensorflow.lite)
 
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)

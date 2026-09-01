@@ -2,6 +2,7 @@ package com.leeotts.cicero
 
 import android.app.Application
 import android.util.Log
+import com.leeotts.cicero.audio.VoiceHandoff
 import com.leeotts.cicero.glasses.GlassesController
 import com.leeotts.cicero.home.NestController
 import com.leeotts.cicero.location.DestinationLog
@@ -31,6 +32,15 @@ class CiceroApp : Application() {
 
     /** Where the assistant was last asked to go, for the pin on the Map screen. */
     val destinations: DestinationLog by lazy { DestinationLog() }
+
+    /**
+     * Arbitrates the one microphone between the wake word and the Ask screen.
+     *
+     * Process-scoped because it describes a single piece of hardware: a second
+     * instance would describe a second microphone that does not exist, and the
+     * two holders would stop seeing each other.
+     */
+    val voice: VoiceHandoff by lazy { VoiceHandoff() }
 
     /**
      * One Nest client for the process.

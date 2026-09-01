@@ -70,6 +70,13 @@ data class BrainConfig(
     /** On by default: usually one machine serves both, so one address is enough. */
     val whisperSameServer: Boolean = true,
 
+    /**
+     * Whether the wake word listens. Off by default: it holds the microphone
+     * and keeps the CPU out of deep sleep, which is the user's call to make,
+     * not a default to inherit.
+     */
+    val wakeWordEnabled: Boolean = false,
+
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
 ) {
     val provider: Provider get() = Providers.byId(providerId)
@@ -213,6 +220,7 @@ private val LOCAL_TOOLS = booleanPreferencesKey("local_tools")
 private val WHISPER_URL = stringPreferencesKey("whisper_url")
 private val WHISPER_MODEL = stringPreferencesKey("whisper_model")
 private val WHISPER_SAME = booleanPreferencesKey("whisper_same_server")
+private val WAKE_WORD = booleanPreferencesKey("wake_word_enabled")
 private val THEME_MODE = stringPreferencesKey("theme_mode")
 
 // Not part of BrainConfig: a half-finished sign-in is transient, and nothing in
@@ -256,6 +264,7 @@ internal fun Preferences.toConfig(secrets: Secrets): BrainConfig {
         whisperBaseUrl = this[WHISPER_URL]?.ifBlank { null } ?: defaults.whisperBaseUrl,
         whisperModel = this[WHISPER_MODEL]?.ifBlank { null } ?: defaults.whisperModel,
         whisperSameServer = this[WHISPER_SAME] ?: defaults.whisperSameServer,
+        wakeWordEnabled = this[WAKE_WORD] ?: defaults.wakeWordEnabled,
         themeMode = this[THEME_MODE]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
             ?: defaults.themeMode,
     )
@@ -295,6 +304,7 @@ private fun MutablePreferences.write(next: BrainConfig, secrets: Secrets) {
     this[WHISPER_URL] = next.whisperBaseUrl
     this[WHISPER_MODEL] = next.whisperModel
     this[WHISPER_SAME] = next.whisperSameServer
+    this[WAKE_WORD] = next.wakeWordEnabled
     this[THEME_MODE] = next.themeMode.name
     this[MIGRATED] = true
 }

@@ -52,6 +52,7 @@ import com.leeotts.cicero.ui.components.EmptyState
 import com.leeotts.cicero.ui.components.assistantBubbleStyle
 import com.leeotts.cicero.ui.components.rememberSystemFlag
 import com.leeotts.cicero.ui.components.userBubbleStyle
+import com.leeotts.cicero.CiceroApp
 import com.leeotts.cicero.ui.theme.Radius
 import com.leeotts.cicero.ui.theme.Space
 import com.leeotts.cicero.util.findActivity
@@ -104,6 +105,21 @@ fun AskScreen(
                 Manifest.permission.RECORD_AUDIO,
             )
         if (noDialogLeft) context.openAppDetailsSettings()
+    }
+
+    // The other half of the wake-word hand-off. The service releases the
+    // microphone, raises the request and launches this screen; picking it up
+    // here is what makes the wake word lead into a question rather than just
+    // opening the app. Publishing [listening] back is what stops the service
+    // reopening the microphone underneath the recognizer.
+    val voice = remember(context) { (context.applicationContext as CiceroApp).voice }
+    val pendingListen by voice.pendingListen.collectAsStateWithLifecycle()
+    LaunchedEffect(listening) { voice.holdMicrophone(listening) }
+    DisposableEffect(Unit) { onDispose { voice.holdMicrophone(false) } }
+    LaunchedEffect(pendingListen, speechAvailable, micGranted.value) {
+        if (!pendingListen || !speechAvailable || !micGranted.value) return@LaunchedEffect
+        // Taken, not just read, so a recomposition cannot start a second capture.
+        if (voice.takeListenRequest()) beginListening()
     }
 
     // Follow the conversation down as it grows, and again when the thinking

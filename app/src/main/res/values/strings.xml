@@ -133,6 +133,14 @@
     <string name="settings_whisper_same_server">Same server as the model</string>
     <string name="settings_whisper_url">Whisper URL</string>
     <string name="settings_whisper_model">Whisper model</string>
+
+    <!-- Short on purpose: the test phone runs a large display font and a long
+         label wraps the switch off the row. -->
+    <string name="settings_wake_word">Wake word</string>
+    <string name="settings_wake_word_toggle">Listen for \"Hey Cicero\"</string>
+    <string name="settings_wake_word_hint">Listens only while the glasses are connected. Keeps the phone awake, so it costs battery.</string>
+    <string name="wake_word_channel">Wake word</string>
+    <string name="wake_word_notification">Listening for \"Hey Cicero\"</string>
     <string name="settings_test_connection">Test connection</string>
     <string name="settings_testing">Testing\u2026</string>
     <string name="settings_api_key">API key</string>

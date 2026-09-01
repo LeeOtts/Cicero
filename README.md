@@ -17,11 +17,25 @@ intercepted, and on non-display glasses the temple captouch is reserved by the s
 (tap = pause/resume, tap-and-hold = stop). The intent is to run **our own** wake phrase
 alongside Meta's and answer with a model you chose.
 
-That wake phrase is not built yet. Voice input is, but only through the **phone's**
-microphone: the mic button on the Ask screen transcribes as you speak, straight into the
-question field, where it stays editable and is never sent on your behalf. Answers come
-back through Android text-to-speech. Capturing speech through the glasses themselves is a
-separate problem — it needs the Bluetooth HFP route, and is not built.
+That wake phrase now exists, through the **phone's** microphone. It runs
+[openWakeWord](https://github.com/dscripka/openWakeWord) on TFLite entirely on device —
+no account, no API key, and no audio leaves the phone. It is off by default; the switch
+is under Settings → Wake word, and it listens only while the glasses are connected.
+
+The phone's microphone, deliberately. Listening through the glasses would mean holding
+the Bluetooth HFP route open, which drops them to 8 kHz and takes the microphone away
+from Meta AI — so `"Hey Meta"` would stop working for as long as Cicero listened. On
+A2DP the two coexist. Capturing speech through the glasses themselves is still a
+separate, unbuilt problem.
+
+Either trigger lands on the Ask screen with the microphone already live: the wake word,
+or the mic button. Speech is transcribed as you speak, straight into the question field,
+where it stays editable and is never sent on your behalf. Answers come back through
+Android text-to-speech.
+
+The phrase shipping today is openWakeWord's pre-trained `hey_jarvis`, which stands in
+until a `"Hey Cicero"` model is trained — the pre-trained models are CC BY-NC-SA, and one
+you train yourself is not.
 
 ## What it can do
 

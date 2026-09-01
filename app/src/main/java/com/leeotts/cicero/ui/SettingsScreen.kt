@@ -211,6 +211,13 @@ fun SettingsScreen(
         }
         testResult?.let { TestResultRow(it) }
 
+        SectionHeader(stringResource(R.string.settings_wake_word))
+        Hint(stringResource(R.string.settings_wake_word_hint))
+        SettingToggle(
+            stringResource(R.string.settings_wake_word_toggle),
+            config.wakeWordEnabled,
+        ) { v -> onUpdate { it.copy(wakeWordEnabled = v) } }
+
         SectionHeader(stringResource(R.string.settings_nest))
         Hint(stringResource(R.string.settings_nest_hint))
         SettingField(

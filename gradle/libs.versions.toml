@@ -32,6 +32,15 @@ maplibre = "13.5.1"
 # Fused location is free and keyless; only the Maps SDK needed billing.
 playServicesLocation = "21.4.0"
 
+# openWakeWord runs the wake word as three TFLite graphs. TFLite, not ONNX
+# Runtime, on two counts: upstream makes tflite the default for efficiency (ONNX
+# is only the Windows default, for want of tflite wheels), and openWakeWord #336
+# reports the ONNX melspectrogram emitting a different numerical distribution
+# than the tflite one - which puts embeddings outside the range the classifiers
+# were trained on. The classifiers are trained against the tflite melspec.
+# It is also a few MB against ONNX Runtime's tens.
+tensorflowLite = "2.17.0"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
@@ -60,6 +69,8 @@ androidx-browser = { group = "androidx.browser", name = "browser", version.ref =
 
 maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "maplibre" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+
+tensorflow-lite = { group = "org.tensorflow", name = "tensorflow-lite", version.ref = "tensorflowLite" }
 
 mwdat-core = { group = "com.meta.wearable", name = "mwdat-core", version.ref = "mwdat" }
 mwdat-camera = { group = "com.meta.wearable", name = "mwdat-camera", version.ref = "mwdat" }
