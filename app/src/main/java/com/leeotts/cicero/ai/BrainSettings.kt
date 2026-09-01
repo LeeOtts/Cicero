@@ -26,6 +26,17 @@ data class Target(val providerId: String, val model: String) {
 }
 
 /**
+ * Which address reaches the self-hosted server.
+ *
+ * The same machine answers on a LAN IP at home and on a Tailscale name
+ * anywhere, and neither works in the other place: a LAN IP does not resolve off
+ * the network. [AUTO] settles it per network instead of asking the user to
+ * remember, which is the whole point - the switch is needed exactly when
+ * fiddling with settings is least convenient.
+ */
+enum class LocalUrlMode { AUTO, LAN, TAILSCALE }
+
+/**
  * Everything the user can change about the assistant backend.
  *
  * Keys and models are maps rather than named fields because the provider list is
@@ -42,6 +53,11 @@ data class BrainConfig(
 
     /** Only the self-hosted provider has an address and capabilities to set. */
     val localBaseUrl: String = OpenAiCompatibleBrain.LM_STUDIO_DEFAULT,
+    /** Alternate address for the same server, reached over Tailscale when the
+     *  phone is off the home network - a LAN IP does not resolve there. */
+    val localTailscaleUrl: String = "",
+    /** Which of the two addresses above is used, or [LocalUrlMode.AUTO] to decide. */
+    val localUrlMode: LocalUrlMode = LocalUrlMode.AUTO,
     val localVision: Boolean = false,
     val localTools: Boolean = true,
 
@@ -70,8 +86,32 @@ data class BrainConfig(
     fun modelFor(provider: Provider): String =
         models[provider.id]?.ifBlank { null } ?: provider.defaultModel
 
+    /**
+     * Which of the two local addresses to use.
+     *
+     * Pure and synchronous so the rules can be tested without a network:
+     * [lanReachable] is the probe's answer, passed in rather than taken, and is
+     * null when nothing has probed yet. Only AUTO with both addresses set
+     * consults it - every other case has one honest answer, which is what lets
+     * [LocalEndpoint] skip the probe entirely most of the time.
+     */
+    fun localUrl(lanReachable: Boolean? = null): String {
+        if (localTailscaleUrl.isBlank()) return localBaseUrl
+        if (localBaseUrl.isBlank()) return localTailscaleUrl
+        return when (localUrlMode) {
+            LocalUrlMode.LAN -> localBaseUrl
+            LocalUrlMode.TAILSCALE -> localTailscaleUrl
+            // Unprobed AUTO favours the LAN address: at home it is the right
+            // answer, and away from home the probe will have run.
+            LocalUrlMode.AUTO -> if (lanReachable == false) localTailscaleUrl else localBaseUrl
+        }
+    }
+
+    /** The address as things stand, with no probe result to hand. */
+    val activeLocalUrl: String get() = localUrl()
+
     fun baseUrlFor(provider: Provider): String =
-        if (provider.userEditableUrl) localBaseUrl else provider.baseUrl
+        if (provider.userEditableUrl) activeLocalUrl else provider.baseUrl
 
     fun defaultTarget(): Target = Target(providerId, modelFor(provider))
 
@@ -97,7 +137,7 @@ data class BrainConfig(
     val speechSharesServer: Boolean get() = whisperSameServer && provider.userEditableUrl
 
     /** Where recordings actually go. */
-    val speechUrl: String get() = if (speechSharesServer) localBaseUrl else whisperBaseUrl
+    val speechUrl: String get() = if (speechSharesServer) activeLocalUrl else whisperBaseUrl
 }
 
 class BrainSettings(
@@ -166,6 +206,8 @@ internal val PROVIDER_ID = stringPreferencesKey("provider_id")
 internal val MIGRATED = booleanPreferencesKey("migrated_to_catalog")
 private val ROUTING = booleanPreferencesKey("routing_enabled")
 private val LOCAL_URL = stringPreferencesKey("local_url")
+private val LOCAL_TAILSCALE_URL = stringPreferencesKey("local_tailscale_url")
+private val LOCAL_URL_MODE = stringPreferencesKey("local_url_mode")
 private val LOCAL_VISION = booleanPreferencesKey("local_vision")
 private val LOCAL_TOOLS = booleanPreferencesKey("local_tools")
 private val WHISPER_URL = stringPreferencesKey("whisper_url")
@@ -202,6 +244,11 @@ internal fun Preferences.toConfig(secrets: Secrets): BrainConfig {
         keys = keys,
         models = models,
         localBaseUrl = this[LOCAL_URL]?.ifBlank { null } ?: defaults.localBaseUrl,
+        localTailscaleUrl = this[LOCAL_TAILSCALE_URL]?.ifBlank { null } ?: defaults.localTailscaleUrl,
+        // Same shape as themeMode: an unreadable value falls back rather than
+        // throwing, so a hand-edited or downgraded store still opens.
+        localUrlMode = this[LOCAL_URL_MODE]?.let { runCatching { LocalUrlMode.valueOf(it) }.getOrNull() }
+            ?: defaults.localUrlMode,
         localVision = this[LOCAL_VISION] ?: defaults.localVision,
         localTools = this[LOCAL_TOOLS] ?: defaults.localTools,
         routingEnabled = this[ROUTING] ?: defaults.routingEnabled,
@@ -237,6 +284,12 @@ private fun MutablePreferences.write(next: BrainConfig, secrets: Secrets) {
     }
     this[ROUTING] = next.routingEnabled
     this[LOCAL_URL] = next.localBaseUrl
+    if (next.localTailscaleUrl.isBlank()) {
+        remove(LOCAL_TAILSCALE_URL)
+    } else {
+        this[LOCAL_TAILSCALE_URL] = next.localTailscaleUrl
+    }
+    this[LOCAL_URL_MODE] = next.localUrlMode.name
     this[LOCAL_VISION] = next.localVision
     this[LOCAL_TOOLS] = next.localTools
     this[WHISPER_URL] = next.whisperBaseUrl

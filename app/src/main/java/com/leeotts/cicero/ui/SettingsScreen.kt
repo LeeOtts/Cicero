@@ -18,12 +18,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -32,7 +34,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,6 +51,7 @@ import com.leeotts.cicero.R
 import com.leeotts.cicero.OAuthState
 import com.leeotts.cicero.TestResult
 import com.leeotts.cicero.ai.BrainConfig
+import com.leeotts.cicero.ai.LocalUrlMode
 import com.leeotts.cicero.ai.ModelList
 import com.leeotts.cicero.ai.Provider
 import com.leeotts.cicero.ai.Providers
@@ -90,6 +95,8 @@ fun SettingsScreen(
     nestTestResult: TestResult?,
     onUpdateNest: ((NestConfig) -> NestConfig) -> Unit,
     onTestNest: () -> Unit,
+    onClearHistory: () -> Unit,
+    onClearNotes: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -226,10 +233,82 @@ fun SettingsScreen(
         }
         nestTestResult?.let { TestResultRow(it) }
 
+        SectionHeader(stringResource(R.string.settings_data))
+        Hint(stringResource(R.string.settings_data_hint))
+        DataSection(onClearHistory = onClearHistory, onClearNotes = onClearNotes)
+
         SectionHeader(stringResource(R.string.settings_permissions))
         PermissionsSection()
     }
 }
+
+/**
+ * The two irreversible buttons.
+ *
+ * Both are destructive and neither can be undone, so each goes through a
+ * confirmation naming exactly what goes - unlike a single note, which is cheap
+ * enough to delete outright and put back from the snackbar.
+ */
+@Composable
+private fun DataSection(
+    onClearHistory: () -> Unit,
+    onClearNotes: () -> Unit,
+) {
+    var confirming by remember { mutableStateOf<DataConfirmation?>(null) }
+
+    OutlinedButton(
+        onClick = { confirming = DataConfirmation.HISTORY },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text(stringResource(R.string.settings_clear_history)) }
+
+    OutlinedButton(
+        onClick = { confirming = DataConfirmation.NOTES },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text(stringResource(R.string.settings_clear_notes)) }
+
+    confirming?.let { target ->
+        val isHistory = target == DataConfirmation.HISTORY
+        AlertDialog(
+            onDismissRequest = { confirming = null },
+            title = {
+                Text(
+                    stringResource(
+                        if (isHistory) R.string.settings_clear_history_title
+                        else R.string.settings_clear_notes_title,
+                    ),
+                )
+            },
+            text = {
+                Text(
+                    stringResource(
+                        if (isHistory) R.string.settings_clear_history_body
+                        else R.string.settings_clear_notes_body,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (isHistory) onClearHistory() else onClearNotes()
+                        confirming = null
+                    },
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+}
+
+private enum class DataConfirmation { HISTORY, NOTES }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -273,6 +352,32 @@ private fun ProviderSettings(
     if (provider.userEditableUrl) {
         SettingField(stringResource(R.string.settings_server_url), config.localBaseUrl) { v ->
             onUpdate { it.copy(localBaseUrl = v) }
+        }
+        SettingField(stringResource(R.string.settings_tailscale_url), config.localTailscaleUrl) { v ->
+            onUpdate { it.copy(localTailscaleUrl = v) }
+        }
+        Hint(stringResource(R.string.settings_tailscale_hint))
+        // Hidden rather than greyed out while there is nothing to switch between.
+        if (config.localTailscaleUrl.isNotBlank()) {
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                LocalUrlMode.entries.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = config.localUrlMode == mode,
+                        onClick = { onUpdate { it.copy(localUrlMode = mode) } },
+                        shape = SegmentedButtonDefaults.itemShape(index, LocalUrlMode.entries.size),
+                        label = { Text(stringResource(localUrlModeLabel(mode))) },
+                    )
+                }
+            }
+            Hint(
+                stringResource(
+                    if (config.localUrlMode == LocalUrlMode.AUTO) {
+                        R.string.settings_local_url_auto_hint
+                    } else {
+                        R.string.settings_local_url_fixed_hint
+                    },
+                ),
+            )
         }
     }
 
@@ -470,6 +575,13 @@ private fun Hint(text: String) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+@StringRes
+private fun localUrlModeLabel(mode: LocalUrlMode): Int = when (mode) {
+    LocalUrlMode.AUTO -> R.string.settings_local_url_auto
+    LocalUrlMode.LAN -> R.string.settings_local_url_lan
+    LocalUrlMode.TAILSCALE -> R.string.settings_local_url_tailscale
 }
 
 @StringRes

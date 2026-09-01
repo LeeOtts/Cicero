@@ -11,6 +11,7 @@ import com.leeotts.cicero.ai.BrainConfig
 import com.leeotts.cicero.ai.BrainException
 import com.leeotts.cicero.ai.BrainFactory
 import com.leeotts.cicero.ai.BrainSettings
+import com.leeotts.cicero.ai.LocalEndpoint
 import com.leeotts.cicero.ai.ModelCatalog
 import com.leeotts.cicero.ai.ModelList
 import com.leeotts.cicero.ai.Msg
@@ -18,16 +19,20 @@ import com.leeotts.cicero.ai.Provider
 import com.leeotts.cicero.ai.Providers
 import com.leeotts.cicero.ai.Router
 import com.leeotts.cicero.ai.TaskRole
+import com.leeotts.cicero.ai.withResolvedLocalUrl
 import com.leeotts.cicero.ai.oauth.OAuthResult
 import com.leeotts.cicero.ai.oauth.OpenRouterAuth
 import com.leeotts.cicero.audio.Speaker
 import com.leeotts.cicero.data.Conversation
 import com.leeotts.cicero.data.ConversationRepository
+import com.leeotts.cicero.data.DeletedConversation
 import com.leeotts.cicero.data.Role
 import com.leeotts.cicero.data.Turn
 import com.leeotts.cicero.home.NestConfig
 import com.leeotts.cicero.tools.ToolRegistry
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
@@ -106,6 +111,10 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    /** Snackbar traffic - deletions and their undo. Collected by the app shell. */
+    private val _messages = Channel<UiMessage>(Channel.BUFFERED)
+    val messages: Flow<UiMessage> = _messages.receiveAsFlow()
 
     private val _testResult = MutableStateFlow<TestResult?>(null)
     val testResult: StateFlow<TestResult?> = _testResult.asStateFlow()
@@ -255,7 +264,10 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _busy.value = true
             _testResult.value = TestResult.Running
-            _testResult.value = BrainFactory.brain(config.value).testConnection().fold(
+            // Resolved first, so the button reports on the address a question
+            // would actually use rather than the one merely typed in.
+            val cfg = config.value.withResolvedLocalUrl(getApplication())
+            _testResult.value = BrainFactory.brain(cfg).testConnection().fold(
                 onSuccess = { TestResult.Ok("Connected — $it") },
                 onFailure = { TestResult.Failed("Failed — ${it.message}") },
             )
@@ -267,7 +279,9 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         if (_busy.value || question.isBlank()) return
         viewModelScope.launch {
             _busy.value = true
-            val cfg = config.value
+            // Once per turn: the answer, its title and any transcription all
+            // read the address off this one config.
+            val cfg = config.value.withResolvedLocalUrl(getApplication())
             val routing = Router.route(cfg, question, history.size)
             var brain = BrainFactory.brain(cfg, routing.target)
             val now = System.currentTimeMillis()
@@ -302,6 +316,9 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 result.spoken
             } catch (e: BrainException) {
                 failed = true
+                // The cache is keyed on the network, which cannot notice a server
+                // going down while the phone stays put. Re-probe next turn.
+                LocalEndpoint.invalidate()
                 e.spokenMessage // already phrased for a human
             } catch (e: Exception) {
                 failed = true
@@ -411,4 +428,43 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         _exchanges.value = emptyList()
     }
 
+    /**
+     * Deletes one thread, with undo.
+     *
+     * The live transcript is left alone: it is the conversation in progress, not
+     * the stored log, and clearing it because an old thread was deleted would
+     * lose context the user never asked to drop.
+     */
+    fun deleteConversation(id: Long) {
+        viewModelScope.launch {
+            val deleted = repository.deleteConversation(id) ?: return@launch
+            _messages.send(
+                UiMessage(
+                    text = getApplication<Application>().getString(R.string.history_deleted),
+                    actionLabel = getApplication<Application>().getString(R.string.action_undo),
+                    action = { restoreConversation(deleted) },
+                ),
+            )
+        }
+    }
+
+    private fun restoreConversation(deleted: DeletedConversation) {
+        viewModelScope.launch { repository.restoreConversation(deleted) }
+    }
+
+    /**
+     * Drops every stored thread. Not undoable, so the caller must confirm first.
+     *
+     * The live transcript goes too - leaving it visible after wiping the log
+     * would be the one copy of a conversation the user just deleted.
+     */
+    fun clearHistory() {
+        viewModelScope.launch {
+            repository.clearAllHistory()
+            clearConversation()
+            _messages.send(
+                UiMessage(text = getApplication<Application>().getString(R.string.history_cleared)),
+            )
+        }
+    }
 }

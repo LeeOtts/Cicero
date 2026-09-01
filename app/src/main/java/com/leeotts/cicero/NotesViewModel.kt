@@ -84,4 +84,22 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
             repository.restoreNote(note)
         }
     }
+
+    /**
+     * Deletes every note. No undo - the confirmation dialog is the safety net -
+     * so pending reminders are cancelled rather than left to fire against rows
+     * that no longer exist.
+     */
+    fun clearAll() {
+        viewModelScope.launch {
+            repository.allNotes()
+                .filter { it.remindAt != null }
+                .forEach { Reminders.cancel(getApplication(), it.id) }
+            repository.clearAllNotes()
+            lastDeleted = null
+            _messages.send(
+                UiMessage(text = getApplication<Application>().getString(R.string.notes_cleared)),
+            )
+        }
+    }
 }

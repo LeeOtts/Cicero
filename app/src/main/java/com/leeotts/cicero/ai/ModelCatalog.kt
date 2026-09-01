@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.OkHttpClient
 
 /**
  * One model a provider will accept, plus what it can do.
@@ -75,15 +76,23 @@ object ModelCatalog {
         auth: AuthStyle = AuthStyle.BEARER,
         extraHeaders: Map<String, String> = emptyMap(),
         friendlyName: String = "the local server",
+        httpClient: OkHttpClient = Http.client,
     ): Result<List<String>> = runCatching {
         val root = baseUrl.trimEnd('/').removeSuffix("/v1")
-        parseOpenAi(get("$root/v1/models", auth.headers(apiKey) + extraHeaders, friendlyName))
+        parseOpenAi(
+            get("$root/v1/models", auth.headers(apiKey) + extraHeaders, friendlyName, httpClient),
+        )
             .map { it.id }
             .sorted()
     }
 
-    private suspend fun get(url: String, headers: Map<String, String>, who: String): JsonObject =
-        Http.json.parseToJsonElement(Http.getRaw(url, headers, who)) as JsonObject
+    private suspend fun get(
+        url: String,
+        headers: Map<String, String>,
+        who: String,
+        httpClient: OkHttpClient = Http.client,
+    ): JsonObject =
+        Http.json.parseToJsonElement(Http.getRaw(url, headers, who, httpClient)) as JsonObject
 
     /** `{"data":[{"id":"..."}]}` - OpenAI, and everyone who copied it. */
     private fun parseOpenAi(root: JsonObject): List<ModelInfo> =

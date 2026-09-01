@@ -61,6 +61,7 @@ fun CiceroNavHost(
             HistoryScreen(
                 conversations = conversations,
                 onOpen = { id -> navController.navigate(Route.Thread(id)) },
+                onDelete = assistant::deleteConversation,
             )
         }
 
@@ -103,6 +104,8 @@ fun CiceroNavHost(
                 nestTestResult = nestTestResult,
                 onUpdateNest = assistant::updateNest,
                 onTestNest = assistant::testNest,
+                onClearHistory = assistant::clearHistory,
+                onClearNotes = notes::clearAll,
             )
         }
 

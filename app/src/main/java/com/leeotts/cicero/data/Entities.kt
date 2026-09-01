@@ -60,6 +60,18 @@ data class TurnFts(
     val text: String,
 )
 
+/**
+ * A deleted thread, held just long enough for the undo snackbar.
+ *
+ * Not an entity - nothing persists it. It exists so a delete can be reversed
+ * without the UI having to know that a thread is a conversation row plus turns
+ * plus an FTS mirror.
+ */
+data class DeletedConversation(
+    val conversation: Conversation,
+    val turns: List<Turn>,
+)
+
 /** A free-standing note or reminder, not tied to a conversation. */
 @Entity(tableName = "notes")
 data class Note(

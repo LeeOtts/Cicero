@@ -122,6 +122,34 @@ class ConversationRepository(context: Context) {
 
     suspend fun deleteNote(id: Long) = dao.deleteNote(id)
 
+    /** Every note, for cancelling their reminders before a bulk delete. */
+    suspend fun allNotes(): List<Note> = dao.allNotes()
+
+    suspend fun clearAllNotes() = dao.deleteAllNotes()
+
+    /**
+     * Deletes one thread, returning what it held so the caller can offer undo.
+     *
+     * Capture files are deliberately left on disk: undo has to be able to put
+     * the thread back whole, and a photo cannot be un-deleted. They are cleaned
+     * up by [clearAllHistory], which is the one delete nothing can undo.
+     */
+    suspend fun deleteConversation(id: Long): DeletedConversation? = dao.deleteConversation(id)
+
+    suspend fun restoreConversation(deleted: DeletedConversation) = dao.restoreConversation(deleted)
+
+    /** Drops every thread, and the captures they referred to. */
+    suspend fun clearAllHistory() {
+        dao.deleteAllConversations()
+        withContext(Dispatchers.IO) {
+            // The whole directory, not just the paths still referenced: this is
+            // the only moment anything reclaims captures orphaned by earlier
+            // single-thread deletes.
+            runCatching { File(appContext.filesDir, "captures").deleteRecursively() }
+                .onFailure { Log.e(TAG, "failed to clear captures", it) }
+        }
+    }
+
     /**
      * Puts a deleted note back. @PrimaryKey(autoGenerate = true) honours a
      * non-zero id, so the row returns under its original id - which the reminder

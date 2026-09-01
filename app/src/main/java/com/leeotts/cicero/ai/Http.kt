@@ -39,6 +39,20 @@ object Http {
         .retryOnConnectionFailure(true)
         .build()
 
+    /**
+     * For "is this address alive" checks, where the answer has to arrive before
+     * the user notices. [client]'s 15s connect timeout is right for a cold model
+     * but wrong here: an address that is simply not on this network would stall
+     * every request behind it. Built with newBuilder so the connection pool and
+     * dispatcher are shared, and without retries, because a probe that fails is
+     * the answer rather than something to try again.
+     */
+    val probeClient: OkHttpClient = client.newBuilder()
+        .connectTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        .readTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        .retryOnConnectionFailure(false)
+        .build()
+
     /** POSTs [body] and parses the response as a JSON object. */
     suspend fun postJson(
         url: String,
@@ -69,17 +83,23 @@ object Http {
         }
     }
 
-    /** GET returning the raw body, used for reachability checks. */
+    /**
+     * GET returning the raw body, used for reachability checks.
+     *
+     * [httpClient] defaults to the patient [client]; pass [probeClient] when a
+     * slow failure would be worse than a wrong answer.
+     */
     suspend fun getRaw(
         url: String,
         headers: Map<String, String> = emptyMap(),
         friendlyName: String,
+        httpClient: OkHttpClient = client,
     ): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).get()
             .apply { headers.forEach { (k, v) -> addHeader(k, v) } }
             .build()
         val response = try {
-            client.newCall(request).execute()
+            httpClient.newCall(request).execute()
         } catch (e: IOException) {
             throw BrainException("I couldn't reach $friendlyName.", e)
         }
@@ -89,6 +109,9 @@ object Http {
             text
         }
     }
+
+    /** Long enough for a local server on the same Wi-Fi, short enough to not be felt. */
+    private const val PROBE_TIMEOUT_MS = 1_500L
 
     /** Turns an HTTP status into something worth hearing out loud. */
     private fun explain(code: Int, who: String, body: String): String = when (code) {

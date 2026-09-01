@@ -61,6 +61,71 @@ interface CiceroDao {
     @Query("SELECT COUNT(*) FROM turns WHERE conversationId = :conversationId")
     suspend fun turnCount(conversationId: Long): Int
 
+    @Query("SELECT * FROM turns WHERE conversationId = :conversationId")
+    suspend fun turnsFor(conversationId: Long): List<Turn>
+
+    @Query("SELECT * FROM turns")
+    suspend fun allTurns(): List<Turn>
+
+    @Query("DELETE FROM turns_fts WHERE rowid = :rowId")
+    suspend fun deleteFts(rowId: Long)
+
+    @Query("DELETE FROM turns_fts")
+    suspend fun deleteAllFts()
+
+    @Query("DELETE FROM turns WHERE conversationId = :conversationId")
+    suspend fun deleteTurnsForConversation(conversationId: Long)
+
+    @Query("DELETE FROM turns")
+    suspend fun deleteAllTurnRows()
+
+    @Query("DELETE FROM conversations WHERE id = :id")
+    suspend fun deleteConversationRow(id: Long)
+
+    @Query("DELETE FROM conversations")
+    suspend fun deleteAllConversationRows()
+
+    /**
+     * Deletes one thread - turns, FTS mirror and all - and hands back everything
+     * it held so [restoreConversation] can put it right back.
+     *
+     * There is no ON DELETE CASCADE on turns.conversationId (see [Turn]), and
+     * `turns_fts` is a hand-maintained mirror rather than an external-content
+     * table, so both are cleared here. Deleting only the conversation row would
+     * leave orphaned turns and a search index still matching text the user
+     * believes is gone.
+     */
+    @Transaction
+    suspend fun deleteConversation(id: Long): DeletedConversation? {
+        val conversation = conversation(id) ?: return null
+        val turns = turnsFor(id)
+        turns.forEach { deleteFts(it.id) }
+        deleteTurnsForConversation(id)
+        deleteConversationRow(id)
+        return DeletedConversation(conversation, turns)
+    }
+
+    /**
+     * Puts a deleted thread back, ids and all.
+     *
+     * @Insert with autoGenerate honours a non-zero id, so the thread returns
+     * under the id its turns already point at, and insertTurn rebuilds the FTS
+     * rows on the way through.
+     */
+    @Transaction
+    suspend fun restoreConversation(deleted: DeletedConversation) {
+        insertConversation(deleted.conversation)
+        deleted.turns.forEach { insertTurn(it) }
+    }
+
+    /** Wipes every thread. Not undoable, so callers may delete capture files. */
+    @Transaction
+    suspend fun deleteAllConversations() {
+        deleteAllFts()
+        deleteAllTurnRows()
+        deleteAllConversationRows()
+    }
+
     /**
      * Full-text search across every turn, newest first.
      *
@@ -97,6 +162,12 @@ interface CiceroDao {
 
     @Query("DELETE FROM notes WHERE id = :id")
     suspend fun deleteNote(id: Long)
+
+    @Query("SELECT * FROM notes")
+    suspend fun allNotes(): List<Note>
+
+    @Query("DELETE FROM notes")
+    suspend fun deleteAllNotes()
 }
 
 /**

@@ -86,6 +86,7 @@ fun CiceroRoot(
         // One collector per event source, hoisted here so any screen can raise
         // a snackbar without owning a host of its own.
         LaunchedEffect(Unit) { notes.messages.collect { it.show(snackbarHostState) } }
+        LaunchedEffect(Unit) { assistant.messages.collect { it.show(snackbarHostState) } }
 
         fun go(route: Route) {
             scope.launch { drawerState.close() }
