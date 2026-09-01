@@ -17,11 +17,16 @@ intercepted, and on non-display glasses the temple captouch is reserved by the s
 (tap = pause/resume, tap-and-hold = stop). The intent is to run **our own** wake phrase
 alongside Meta's and answer with a model you chose.
 
-That wake phrase is not built yet. Voice input is, but only through the **phone's**
-microphone: the mic button on the Ask screen transcribes as you speak, straight into the
-question field, where it stays editable and is never sent on your behalf. Answers come
-back through Android text-to-speech. Capturing speech through the glasses themselves is a
-separate problem — it needs the Bluetooth HFP route, and is not built.
+`"Hey Cicero"` is that phrase, and it works — through the **phone's** microphone, with the
+app closed and the screen off. Say it, ask your question, and the answer comes back through
+the glasses over A2DP. `"Hey Meta"` keeps working alongside it.
+
+Listening through the glasses' own microphone is offered too, and is off by default for
+reasons worth reading before you turn it on — see [Battery, and the glasses
+microphone](#battery-and-the-glasses-microphone).
+
+The mic button on the Ask screen is unchanged: it transcribes as you speak, straight into
+the question field, where it stays editable and is never sent on your behalf.
 
 ## What it can do
 
@@ -30,6 +35,7 @@ unavailable rather than failing:
 
 | Ask for | Needs |
 |---|---|
+| "Hey Cicero, what am I looking at" — hands-free, phone in your pocket | a Picovoice key and keyword (below), plus the two on the next line |
 | "What am I looking at" — takes a photo through the glasses | paired, worn glasses **and** a model that can see |
 | "Set an alarm for 7" / "set a timer for ten minutes" | nothing; handed to the phone's clock app |
 | "Remind me in 20 minutes to X" — kept inside Cicero, not the clock app | notification permission, or it fires silently |
@@ -135,10 +141,10 @@ A few things Settings does that are not obvious:
   Local at `http://<machine>:<port>` instead of a LAN IP. Encrypted end to end, no port
   forwarding.
 - **A speech-to-text section appears for every provider except Gemini**, which is the only
-  one that takes raw audio. It points at a Whisper-compatible endpoint, and still has no
-  effect today: the Ask screen's mic button transcribes on the phone, through Android's own
-  recognizer, and never sends audio anywhere. This endpoint is for the glasses microphone,
-  which does not capture yet.
+  one that takes raw audio. It points at a Whisper-compatible endpoint, and it is now
+  live — but only on the glasses microphone path, which has no on-device recognizer to
+  lean on. The Ask screen's mic button and the phone-microphone wake word both transcribe
+  locally through Android's own recognizer and send audio nowhere.
 
 #### Optional: bake a Gemini key in at build time
 
@@ -155,7 +161,66 @@ Settings beats both. Optional — leave both unset and the build still succeeds,
 This key sits in the APK in cleartext, with none of the Keystore protection above. Use it
 for convenience, not for a key you care about.
 
-### 3. Meta AI app + glasses
+### 3. Wake word ("Hey Cicero")
+
+Optional — everything else works without it. Two things are needed, and neither can be
+shipped in the repo because both are issued against your own Picovoice account:
+
+1. **An access key** from https://console.picovoice.ai — free for personal use. Paste it
+   into Settings. It is checked online the first time the engine starts; detection is
+   entirely on-device after that.
+2. **A keyword file.** Train the phrase "Hey Cicero" on the same console and choose
+   platform **Android**. Import the `.ppn` from Settings, or drop it at
+   `app/src/main/assets/porcupine/hey_cicero_android.ppn` before building.
+
+Two ways this bites later, both of which fail at runtime rather than at build time:
+
+- A `.ppn` trained for another platform, or against a different Porcupine major version,
+  loads and then simply never fires. Bumping `porcupine` in `libs.versions.toml` means
+  re-training.
+- Free-tier keywords can expire. Settings shows the engine's own error and lets you import
+  a replacement without a rebuild, which is the whole reason the import button exists.
+
+Listening starts when you open Cicero, and **does not survive a reboot on its own**. That
+is not an oversight: from API 31 Android forbids starting a foreground service from the
+background, and API 34 refuses a microphone-typed one outright unless the app is in the
+foreground. A boot receiver would throw rather than work.
+
+#### Battery, and the glasses microphone
+
+Porcupine is not what costs you anything — its inference is a rounding error. The cost is
+that **an open microphone keeps the CPU out of deep sleep, continuously**. Listening
+without pause is 5–10% of the battery an hour, which is a dead phone by mid-afternoon.
+
+So the app's answer is to know when not to listen. **By default it only listens while the
+glasses are connected**, on the grounds that "what am I looking at" means nothing when they
+are in a drawer — and for a normal wear pattern that removes the cost for most of the day.
+It also stops below 20% battery unless you are charging, during a call, and while another
+app holds the microphone. The notification always says which it is doing and why.
+
+All of that is in one function, `shouldArm` in `audio/ArmingPolicy.kt`, with a test per
+rule. If listening is ever expensive at a moment it did not need to be, that is where the
+bug is.
+
+What would be genuinely free is not available to us: `AlwaysOnHotwordDetector` runs on the
+DSP, which is how "Ok Google" and "Hey Meta" cost nothing, but it needs a keyphrase
+enrolled in the system's SoundTrigger database and a privileged permission. A third-party
+wake word cannot get there on a stock phone.
+
+**The glasses microphone is a different proposition and is off by default.** Holding a
+Bluetooth HFP route open takes the microphone away from Meta AI for as long as it runs —
+`"Hey Meta"` does not degrade, it stops — drops all glasses audio to call quality, and
+drains both devices, the glasses being the one with the small battery you cannot top up
+mid-day. The arming gate cannot help, because the glasses being connected is exactly when
+that path is armed. Whether an open SCO link and a camera capture can coexist at all is
+untested. Run the sample-rate probe on the Glasses screen before trusting it: Porcupine
+needs true 16 kHz, and if your link negotiates narrowband the app will upsample, which
+makes the samples the right shape without restoring what the engine was trained on.
+
+The phone microphone has none of these problems, coexists with `"Hey Meta"`, and still
+fires the glasses camera. It is the configuration to use.
+
+### 4. Meta AI app + glasses
 
 mwdat 0.9.0 requires **Meta AI app V282+** and **glasses firmware V126+**
 (Devices tab → gear → General → About → Version).
@@ -172,7 +237,7 @@ Hardware is optional to build but required to be useful: without glasses, `mwdat
 (MockDeviceKit) covers session and camera paths — switch it on from the Glasses screen — but
 the Bluetooth audio paths need the real thing.
 
-### 4. Android permissions and toggles
+### 5. Android permissions and toggles
 
 Cicero asks for what it needs when it needs it, with two exceptions Android will not let an
 app prompt for:
@@ -182,7 +247,13 @@ app prompt for:
 - **Exact alarms** — never prompted for. Without the grant, reminders are scheduled
   inexactly and may fire late rather than not at all.
 
-### 5. Optional: Nest thermostat
+One more worth knowing if you use the wake word: some manufacturers (Samsung, Xiaomi,
+OnePlus among them) stop background listening regardless of the ongoing notification.
+Settings offers a battery-optimisation exemption for that case. It is the opposite of
+every other control in that section — it asks Android to stop saving power on Cicero's
+behalf — so it is only worth reaching for if listening keeps stopping on its own.
+
+### 6. Optional: Nest thermostat
 
 Only needed for the two thermostat tools. Cicero talks to the Smart Device Management REST
 API rather than Google's Home APIs, which need a hub.
@@ -230,6 +301,14 @@ The unit tests need no device and no credential, and are the fastest proof the s
   with mwdat 0.9.0. Android Studio's newer AGP 9.x default is untested against this SDK.
 - `minSdk 31` is required by `AudioManager.setCommunicationDevice()`, used for the
   Bluetooth HFP microphone path.
+- The wake word's foreground service closes the **microphone** when policy says not to
+  listen, and never stops the **service**. That is deliberate and load-bearing: a stopped
+  service could not restart itself when the glasses reconnect, because API 31 forbids
+  starting a foreground service from the background. It waits, disarmed, for nothing.
+- `WakeCoordinator` and the classes around it (`ArmingPolicy`, `FrameBuffer`, `Endpointer`,
+  `Resample`) contain no Android types at all, so the whole state machine is exercised on
+  the JVM with fakes. That is structural rather than stylistic: `returnDefaultValues` is on
+  for unit tests, so a stray Android call would return null silently instead of failing.
 - The project deliberately lives outside OneDrive; OneDrive sync corrupts Gradle lock files
   in `build/` and `.gradle/`.
 - Adding a provider means adding a line to `Providers.all` and nothing else. If a
