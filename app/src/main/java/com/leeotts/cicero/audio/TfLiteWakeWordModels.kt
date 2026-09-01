@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.res.AssetManager
 import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 
@@ -27,13 +30,36 @@ private const val CLASSIFIER_ASSET = "wakeword/hey_jarvis_v0.1.tflite"
 private const val MEL_SCALE = 10f
 private const val MEL_OFFSET = 2f
 
+private const val MEL_BINS = 32
+private const val EMBED_WINDOW = 76
+private const val EMBEDDING_SIZE = 96
+private const val FEATURE_FRAMES = 16
+
+/**
+ * A direct buffer and its float view, kept together.
+ *
+ * TFLite reads and writes direct buffers without copying. The alternative - the
+ * nested-array overload - allocates a FloatArray per row, which for the
+ * embedding model's 76 x 32 input is 2432 objects every 80 ms, all of them
+ * garbage immediately afterwards.
+ */
+private class Scratch(elements: Int) {
+    val bytes: ByteBuffer =
+        ByteBuffer.allocateDirect(elements * Float.SIZE_BYTES).order(ByteOrder.nativeOrder())
+    val floats: FloatBuffer = bytes.asFloatBuffer()
+}
+
 /**
  * The real models, loaded out of the APK's assets.
  *
  * One interpreter per graph, single-threaded on purpose: these are small graphs
  * run once per 80 ms, and handing them a thread pool costs more in wakeups and
  * contention than it saves in latency - which is the wrong trade for something
- * that runs all day.
+ * that runs all day. XNNPACK is asked for explicitly rather than left to the
+ * default, because the embedding model is twenty convolutions and its kernels
+ * are the difference between a few ms and a few tens of ms per chunk.
+ *
+ * Not thread-safe: the scratch buffers are reused, so one capture loop only.
  */
 internal class TfLiteWakeWordModels private constructor(
     private val melspec: Interpreter,
@@ -43,7 +69,7 @@ internal class TfLiteWakeWordModels private constructor(
 
     companion object {
         fun load(assets: AssetManager): TfLiteWakeWordModels {
-            val options = Interpreter.Options().setNumThreads(1)
+            val options = Interpreter.Options().setNumThreads(1).setUseXNNPACK(true)
             return TfLiteWakeWordModels(
                 melspec = Interpreter(map(assets, MELSPEC_ASSET), options),
                 embedding = Interpreter(map(assets, EMBEDDING_ASSET), options),
@@ -69,8 +95,15 @@ internal class TfLiteWakeWordModels private constructor(
             }
     }
 
-    /** How many samples the melspectrogram graph is currently shaped for. */
-    private var melInputSize = 0
+    private val embedIn = Scratch(EMBED_WINDOW * MEL_BINS)
+    private val embedOut = Scratch(EMBEDDING_SIZE)
+    private val classifyIn = Scratch(FEATURE_FRAMES * EMBEDDING_SIZE)
+    private val classifyOut = Scratch(1)
+
+    /** Sized to whatever the melspectrogram graph is currently shaped for. */
+    private var melIn: Scratch? = null
+    private var melOut: Scratch? = null
+    private var melFrames = 0
 
     /**
      * The melspectrogram graph ships with a placeholder [1, 1] input and has to
@@ -78,39 +111,56 @@ internal class TfLiteWakeWordModels private constructor(
      * follows from that, so it is read back rather than assumed.
      */
     override fun melspectrogram(samples: FloatArray): Array<FloatArray> {
-        if (melInputSize != samples.size) {
+        var input = melIn
+        var output = melOut
+        if (input == null || input.floats.capacity() != samples.size) {
             melspec.resizeInput(0, intArrayOf(1, samples.size))
             melspec.allocateTensors()
-            melInputSize = samples.size
+            val shape = melspec.getOutputTensor(0).shape() // [1, 1, frames, bins]
+            melFrames = shape[2]
+            input = Scratch(samples.size).also { melIn = it }
+            output = Scratch(melFrames * shape[3]).also { melOut = it }
         }
+        requireNotNull(output)
 
-        val shape = melspec.getOutputTensor(0).shape() // [1, 1, frames, bins]
-        val frames = shape[2]
-        val bins = shape[3]
-        val out = Array(1) { Array(1) { Array(frames) { FloatArray(bins) } } }
-        melspec.run(arrayOf(samples), out)
+        input.floats.rewind()
+        input.floats.put(samples)
+        input.bytes.rewind()
+        output.bytes.rewind()
+        melspec.run(input.bytes, output.bytes)
 
         // Upstream applies this before the embedding model. Without it the
         // embeddings land outside the range the classifiers were trained on and
         // the wake word simply never fires.
-        return Array(frames) { f ->
-            FloatArray(bins) { b -> out[0][0][f][b] / MEL_SCALE + MEL_OFFSET }
+        output.floats.rewind()
+        return Array(melFrames) {
+            val frame = FloatArray(MEL_BINS)
+            for (b in 0 until MEL_BINS) frame[b] = output.floats.get() / MEL_SCALE + MEL_OFFSET
+            frame
         }
     }
 
     override fun embed(window: Array<FloatArray>): FloatArray {
-        val input = Array(1) { Array(window.size) { f ->
-            Array(window[f].size) { b -> floatArrayOf(window[f][b]) }
-        } }
-        val out = Array(1) { Array(1) { Array(1) { FloatArray(EMBEDDING_SIZE) } } }
-        embedding.run(input, out)
-        return out[0][0][0]
+        embedIn.floats.rewind()
+        for (frame in window) embedIn.floats.put(frame)
+        embedIn.bytes.rewind()
+        embedOut.bytes.rewind()
+        embedding.run(embedIn.bytes, embedOut.bytes)
+
+        embedOut.floats.rewind()
+        val out = FloatArray(EMBEDDING_SIZE)
+        embedOut.floats.get(out)
+        return out
     }
 
     override fun classify(features: Array<FloatArray>): Float {
-        val out = Array(1) { FloatArray(1) }
-        classifier.run(arrayOf(features), out)
-        return out[0][0]
+        classifyIn.floats.rewind()
+        for (frame in features) classifyIn.floats.put(frame)
+        classifyIn.bytes.rewind()
+        classifyOut.bytes.rewind()
+        classifier.run(classifyIn.bytes, classifyOut.bytes)
+
+        return classifyOut.floats.get(0)
     }
 
     override fun close() {
@@ -119,8 +169,6 @@ internal class TfLiteWakeWordModels private constructor(
         classifier.close()
     }
 }
-
-private const val EMBEDDING_SIZE = 96
 
 /** Loads the packaged models. Held apart so tests can substitute fakes. */
 internal class WakeWordAssets(context: Context) : WakeWordModelSource {

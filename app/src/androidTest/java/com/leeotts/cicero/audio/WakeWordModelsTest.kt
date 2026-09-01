@@ -110,19 +110,45 @@ class WakeWordModelsTest {
         assertFalse("false accept on ~10 s of noise", fired)
     }
 
+    /**
+     * Milliseconds per 80 ms chunk, averaged over [chunks].
+     *
+     * The audio is generated up front on purpose: filling 1280 samples from
+     * Random costs enough to swamp the inference being measured, and doing it
+     * inside the loop made speech and silence look identical.
+     */
+    private fun perChunkMs(amplitude: Int, chunks: Int = 200): Double {
+        val detector = WakeWordDetector(models)
+        val audio = Array(chunks) { noise(WAKE_WORD_CHUNK, amplitude) }
+        val warmUp = Array(20) { noise(WAKE_WORD_CHUNK, amplitude) }
+
+        warmUp.forEach { detector.feed(it) }
+        val started = System.nanoTime()
+        audio.forEach { detector.feed(it) }
+        return (System.nanoTime() - started) / 1_000_000.0 / chunks
+    }
+
     @Test
     fun aChunkIsProcessedWellInsideItsBudget() {
-        val detector = WakeWordDetector(models)
-        val chunks = 100
-
         // Loud, so the VAD gate is open and the embedding model - the expensive
         // half, and the half the battery argument rests on - actually runs.
-        repeat(10) { detector.feed(noise(WAKE_WORD_CHUNK)) }
-        val started = System.nanoTime()
-        repeat(chunks) { detector.feed(noise(WAKE_WORD_CHUNK)) }
-        val perChunkMs = (System.nanoTime() - started) / 1_000_000.0 / chunks
+        val ms = perChunkMs(amplitude = 3000)
 
-        Log.i(TAG, "wake word: %.2f ms per 80 ms chunk".format(perChunkMs))
-        assertTrue("no real-time headroom: $perChunkMs ms per 80 ms", perChunkMs < 40.0)
+        Log.i(TAG, "wake word speech: %.2f ms per 80 ms chunk".format(ms))
+        assertTrue("no real-time headroom: $ms ms per 80 ms", ms < 30.0)
+    }
+
+    @Test
+    fun silenceCostsLessThanSpeech() {
+        // Under the VAD threshold, so the embedding model is skipped and only
+        // the melspectrogram runs. This is the state the phone is in almost all
+        // day, so it - not the speech figure - is what the battery cost comes
+        // down to.
+        val idle = perChunkMs(amplitude = 20)
+        val speech = perChunkMs(amplitude = 3000)
+
+        Log.i(TAG, "wake word idle: %.2f ms, speech: %.2f ms".format(idle, speech))
+        assertTrue("idle should be cheaper than speech: $idle vs $speech", idle < speech)
+        assertTrue("idle is not cheap enough to run all day: $idle ms", idle < 10.0)
     }
 }
