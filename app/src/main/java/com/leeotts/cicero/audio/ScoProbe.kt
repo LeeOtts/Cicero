@@ -2,7 +2,6 @@ package com.leeotts.cicero.audio
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -14,8 +13,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.RandomAccessFile
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /**
  * Phase 2 spike. Answers one question: what sample rate does the glasses
@@ -56,7 +53,7 @@ class ScoProbe(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     private suspend fun record(sampleRate: Int, seconds: Int): Result {
-        val routed = selectGlassesAsCommunicationDevice()
+        val routed = audioManager.selectBluetoothScoDevice()
         // The SCO route needs a moment to settle before AudioRecord sees it.
         delay(ROUTE_SETTLE_MS)
 
@@ -103,7 +100,7 @@ class ScoProbe(private val context: Context) {
         } finally {
             runCatching { record.stop() }
             record.release()
-            audioManager.clearCommunicationDevice()
+            audioManager.clearRoute()
         }
 
         Log.i(
@@ -111,59 +108,5 @@ class ScoProbe(private val context: Context) {
             "SCO probe $sampleRate Hz: $total bytes, peak=$peak, bluetooth=$routed -> $file",
         )
         return Result(sampleRate, file, total, peak, routed)
-    }
-
-    /**
-     * API 31+ replacement for the deprecated startBluetoothSco(). Returns false
-     * if no Bluetooth SCO device is offered, which means the glasses are not
-     * connected for voice.
-     */
-    private fun selectGlassesAsCommunicationDevice(): Boolean {
-        val sco = audioManager.availableCommunicationDevices
-            .firstOrNull { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO }
-            ?: run {
-                Log.w(TAG, "no BLUETOOTH_SCO communication device available")
-                return false
-            }
-        val ok = audioManager.setCommunicationDevice(sco)
-        Log.i(TAG, "setCommunicationDevice(${sco.productName}) = $ok")
-        return ok
-    }
-
-    private fun peakOf(buffer: ByteArray, length: Int): Int {
-        var peak = 0
-        var i = 0
-        while (i + 1 < length) {
-            val sample = ((buffer[i + 1].toInt() shl 8) or (buffer[i].toInt() and 0xFF)).toShort()
-            peak = maxOf(peak, kotlin.math.abs(sample.toInt()))
-            i += 2
-        }
-        return peak
-    }
-
-    private fun wavHeader(dataBytes: Int, sampleRate: Int): ByteArray {
-        val channels = 1
-        val bitsPerSample = 16
-        val byteRate = sampleRate * channels * bitsPerSample / 8
-        return ByteBuffer.allocate(WAV_HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN).apply {
-            put("RIFF".toByteArray())
-            putInt(36 + dataBytes)
-            put("WAVE".toByteArray())
-            put("fmt ".toByteArray())
-            putInt(16)
-            putShort(1)                                   // PCM
-            putShort(channels.toShort())
-            putInt(sampleRate)
-            putInt(byteRate)
-            putShort((channels * bitsPerSample / 8).toShort())
-            putShort(bitsPerSample.toShort())
-            put("data".toByteArray())
-            putInt(dataBytes)
-        }.array()
-    }
-
-    private companion object {
-        const val WAV_HEADER_BYTES = 44
-        const val ROUTE_SETTLE_MS = 2_000L
     }
 }
