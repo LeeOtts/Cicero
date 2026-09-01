@@ -111,11 +111,17 @@
     <string name="settings_server_url">Server URL</string>
     <string name="settings_tailscale_url">Tailscale address</string>
     <string name="settings_tailscale_hint">Optional: the same server, reachable over Tailscale when the phone is off the home network.</string>
+    <!--
+      Kept to one short word each. At a large display font "Tailscale" wrapped
+      to two lines and the segment burst out of the row; "Away" pairs with
+      "Home" and the hint below says which address each one means.
+    -->
     <string name="settings_local_url_auto">Auto</string>
     <string name="settings_local_url_lan">Home</string>
-    <string name="settings_local_url_tailscale">Tailscale</string>
-    <string name="settings_local_url_auto_hint">Cicero tries the home address first and falls back to Tailscale when it cannot be reached, so leaving the house needs no change here.</string>
-    <string name="settings_local_url_fixed_hint">Always uses the address you picked, even when it cannot be reached.</string>
+    <string name="settings_local_url_tailscale">Away</string>
+    <string name="settings_local_url_auto_hint">Cicero tries the server URL first and falls back to the Tailscale address when it cannot be reached, so leaving the house needs no change here.</string>
+    <string name="settings_local_url_lan_hint">Always uses the server URL, even when it cannot be reached.</string>
+    <string name="settings_local_url_tailscale_hint">Always uses the Tailscale address, even at home.</string>
     <string name="settings_model_name">Model name</string>
     <string name="settings_models_loading">Looking for models\u2026</string>
     <string name="settings_models_none">No models are loaded on that server</string>

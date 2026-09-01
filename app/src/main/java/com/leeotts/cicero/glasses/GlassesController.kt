@@ -2,7 +2,9 @@ package com.leeotts.cicero.glasses
 
 import android.graphics.Bitmap as AndroidBitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.util.Log
+import androidx.exifinterface.media.ExifInterface
 import com.leeotts.cicero.TAG
 import com.meta.wearable.dat.camera.Camera
 import com.meta.wearable.dat.camera.addCamera
@@ -27,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.ByteArrayInputStream
 
 /**
  * Owns the DAT session and camera stream.
@@ -133,15 +136,45 @@ class GlassesController {
      * Bitmap or raw HEIC bytes depending on the device and stream config.
      */
     private fun PhotoData.toBitmap(): AndroidBitmap? = when (this) {
-        is PhotoData.Bitmap -> bitmap.also {
-            Log.i(TAG, "toBitmap: PhotoData.Bitmap ${it.width}x${it.height}")
-        }
+        is PhotoData.Bitmap -> bitmap
         is PhotoData.HEIC -> {
             val bytes = ByteArray(data.remaining())
             data.duplicate().get(bytes)
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.also {
-                Log.i(TAG, "toBitmap: PhotoData.HEIC ${it.width}x${it.height}, ${bytes.size} bytes")
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.uprighted(bytes)
+        }
+    }
+
+    /**
+     * Applies the capture's own orientation tag.
+     *
+     * The glasses record which way up the frame was in EXIF rather than
+     * rotating the pixels, and BitmapFactory ignores that tag entirely - so a
+     * capture taken through the glasses arrived on its side. Rotating here
+     * rather than in the UI is deliberate: the look tool sends this bitmap to
+     * the model, and a sideways photo costs accuracy, not just tidiness.
+     */
+    private fun AndroidBitmap.uprighted(source: ByteArray): AndroidBitmap {
+        val tag = runCatching {
+            ExifInterface(ByteArrayInputStream(source))
+                .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        }.getOrElse {
+            // A capture that carries no readable EXIF is not worth failing over;
+            // an unrotated photo beats no photo.
+            Log.w(TAG, "could not read capture orientation", it)
+            ExifInterface.ORIENTATION_NORMAL
+        }
+
+        val transform = transformFor(tag) ?: return this
+        return runCatching {
+            val matrix = Matrix().apply {
+                postRotate(transform.degrees)
+                if (transform.mirrored) postScale(-1f, 1f)
             }
+            AndroidBitmap.createBitmap(this, 0, 0, width, height, matrix, true)
+                .also { if (it != this) recycle() }
+        }.getOrElse {
+            Log.e(TAG, "failed to rotate capture", it)
+            this
         }
     }
 
@@ -337,4 +370,29 @@ class GlassesController {
          *  ladder. It took 6.5s on an emulator, so give real hardware room. */
         const val STREAM_TIMEOUT_MS = 30_000L
     }
+}
+
+/** How an EXIF orientation has to be undone to put a capture upright. */
+internal data class CaptureTransform(val degrees: Float, val mirrored: Boolean)
+
+/**
+ * The transform an EXIF orientation calls for, or null when there is nothing
+ * to do.
+ *
+ * Split out as a pure function so the eight cases can be pinned in a JVM test:
+ * Matrix and Bitmap are Android, and the mapping is where the mistakes live.
+ * The mirrored orientations are rare from a camera but cost nothing to honour,
+ * and a photo silently flipped left-for-right would be worse than a rotated
+ * one - it reads as correct while showing the wrong thing.
+ */
+internal fun transformFor(exifOrientation: Int): CaptureTransform? = when (exifOrientation) {
+    ExifInterface.ORIENTATION_ROTATE_90 -> CaptureTransform(90f, mirrored = false)
+    ExifInterface.ORIENTATION_ROTATE_180 -> CaptureTransform(180f, mirrored = false)
+    ExifInterface.ORIENTATION_ROTATE_270 -> CaptureTransform(270f, mirrored = false)
+    ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> CaptureTransform(0f, mirrored = true)
+    ExifInterface.ORIENTATION_FLIP_VERTICAL -> CaptureTransform(180f, mirrored = true)
+    ExifInterface.ORIENTATION_TRANSPOSE -> CaptureTransform(90f, mirrored = true)
+    ExifInterface.ORIENTATION_TRANSVERSE -> CaptureTransform(270f, mirrored = true)
+    // NORMAL, UNDEFINED, and anything unrecognised: leave the pixels alone.
+    else -> null
 }

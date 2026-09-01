@@ -15,6 +15,8 @@ datastore = "1.1.1"
 room = "2.7.1"
 ksp = "2.2.0-2.0.2"
 coreSplashscreen = "1.0.1"
+# Reads the orientation tag off a glasses capture, which BitmapFactory drops.
+exifinterface = "1.3.7"
 # Custom Tabs, for the OpenRouter OAuth sign-in.
 browser = "1.8.0"
 # NOTE: the compose-bom pin above does NOT hold, and this comment used to claim
@@ -53,6 +55,7 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
+androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 
 maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "maplibre" }

@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.annotation.StringRes
 import com.leeotts.cicero.R
@@ -365,19 +366,21 @@ private fun ProviderSettings(
                         selected = config.localUrlMode == mode,
                         onClick = { onUpdate { it.copy(localUrlMode = mode) } },
                         shape = SegmentedButtonDefaults.itemShape(index, LocalUrlMode.entries.size),
-                        label = { Text(stringResource(localUrlModeLabel(mode))) },
+                        // Equal thirds, and one line each. A label that wraps
+                        // grows its own segment and breaks the row out of shape
+                        // at a large display font.
+                        modifier = Modifier.weight(1f),
+                        label = {
+                            Text(
+                                text = stringResource(localUrlModeLabel(mode)),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
                     )
                 }
             }
-            Hint(
-                stringResource(
-                    if (config.localUrlMode == LocalUrlMode.AUTO) {
-                        R.string.settings_local_url_auto_hint
-                    } else {
-                        R.string.settings_local_url_fixed_hint
-                    },
-                ),
-            )
+            Hint(stringResource(localUrlModeHint(config.localUrlMode)))
         }
     }
 
@@ -582,6 +585,14 @@ private fun localUrlModeLabel(mode: LocalUrlMode): Int = when (mode) {
     LocalUrlMode.AUTO -> R.string.settings_local_url_auto
     LocalUrlMode.LAN -> R.string.settings_local_url_lan
     LocalUrlMode.TAILSCALE -> R.string.settings_local_url_tailscale
+}
+
+/** The labels are one word each, so the hint is where each mode is spelled out. */
+@StringRes
+private fun localUrlModeHint(mode: LocalUrlMode): Int = when (mode) {
+    LocalUrlMode.AUTO -> R.string.settings_local_url_auto_hint
+    LocalUrlMode.LAN -> R.string.settings_local_url_lan_hint
+    LocalUrlMode.TAILSCALE -> R.string.settings_local_url_tailscale_hint
 }
 
 @StringRes
