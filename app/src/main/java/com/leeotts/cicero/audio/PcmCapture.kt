@@ -24,6 +24,9 @@ class PcmCapture(
     private val dispatcher: CoroutineDispatcher,
 ) : UtteranceCapture {
 
+    /** It reads the detector's own stream, so nothing may be closed. */
+    override val needsExclusiveMic = false
+
     @Volatile
     private var cancelled = false
 

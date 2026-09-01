@@ -87,7 +87,10 @@ class WakeCoordinatorTest {
     private fun quiet() = block(1, 1)
     private fun wake() = block(trigger, 1)
 
-    private class Harness(val dispatcher: CoroutineDispatcher) {
+    private class Harness(
+        val dispatcher: CoroutineDispatcher,
+        val exclusiveMic: Boolean = true,
+    ) {
         val source = FakeSource()
         val detector = FakeDetector(777)
         val feedback = FakeFeedback()
@@ -105,12 +108,16 @@ class WakeCoordinatorTest {
                 override fun create(accessKey: String, sensitivity: Float) =
                     Result.success<WakeDetector>(detector)
             },
-            capture = object : UtteranceCapture {
-                override suspend fun capture(): String? {
-                    captureCalls++
-                    return captured
-                }
-                override fun cancel() { cancels++ }
+            captures = object : UtteranceCaptures {
+                override fun create(mic: MicSource, source: AudioSource) =
+                    object : UtteranceCapture {
+                        override val needsExclusiveMic = exclusiveMic
+                        override suspend fun capture(): String? {
+                            captureCalls++
+                            return captured
+                        }
+                        override fun cancel() { cancels++ }
+                    }
             },
             turns = object : TurnSink {
                 override suspend fun run(question: String) {
@@ -172,6 +179,21 @@ class WakeCoordinatorTest {
         assertFalse("the microphone must actually close", h.source.open)
         assertEquals(WakeCoordinator.State.DISARMED, h.coordinator.state.value)
         assertEquals("it must stop reading, not drain the source", 5, h.source.reads)
+    }
+
+    @Test
+    fun `a capture that reads the live stream keeps the microphone open`() = runTest {
+        // The glasses path has no recognizer to hand off to - it reads straight
+        // past the wake word. Closing the source there would throw away the
+        // start of the question, so the handover must be conditional.
+        val h = Harness(StandardTestDispatcher(testScheduler), exclusiveMic = false)
+        h.source.blocks = mutableListOf(wake(), quiet())
+
+        backgroundScope.launch { h.coordinator.run(sessions()) }
+        pump()
+
+        assertEquals("the microphone must not be handed over", 1, h.source.opens)
+        assertEquals(listOf("what am I looking at"), h.questions)
     }
 
     @Test
@@ -254,9 +276,13 @@ class WakeCoordinatorTest {
                 override fun create(accessKey: String, sensitivity: Float) =
                     Result.failure<WakeDetector>(IllegalStateException("invalid access key"))
             },
-            capture = object : UtteranceCapture {
-                override suspend fun capture(): String? = null
-                override fun cancel() {}
+            captures = object : UtteranceCaptures {
+                override fun create(mic: MicSource, source: AudioSource) =
+                    object : UtteranceCapture {
+                        override val needsExclusiveMic = true
+                        override suspend fun capture(): String? = null
+                        override fun cancel() {}
+                    }
             },
             turns = object : TurnSink {
                 override suspend fun run(question: String) = Unit

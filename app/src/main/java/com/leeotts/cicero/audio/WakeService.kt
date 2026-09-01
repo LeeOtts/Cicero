@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.plus
 import java.util.concurrent.Executors
 
@@ -72,6 +73,10 @@ class WakeService : Service() {
         val app = application as CiceroApp
 
         settings = BrainSettings(this)
+        // Read once: changing it is rare and takes effect next time the service
+        // starts, which is a smaller surprise than swapping the audio source
+        // out from under a live detector.
+        val unprocessed = runBlocking { settings.config.first().wakeUnprocessedAudio }
         speaker = Speaker(this)
         feedback = AndroidWakeFeedback(this, speaker)
         installBundledKeyword(this)
@@ -83,9 +88,9 @@ class WakeService : Service() {
         val runner = TurnRunner(app, speaker, historyTtlMs = HISTORY_TTL_MS)
 
         coordinator = WakeCoordinator(
-            sources = AndroidAudioSources(this),
+            sources = AndroidAudioSources(this, unprocessed = unprocessed),
             detectors = PorcupineDetectors(this),
-            capture = RecognizerCapture(this),
+            captures = AndroidUtteranceCaptures(this, audioDispatcher),
             turns = object : TurnSink {
                 override suspend fun run(question: String) {
                     runner.run(question)

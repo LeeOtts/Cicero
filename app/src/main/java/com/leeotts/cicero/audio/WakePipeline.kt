@@ -79,9 +79,31 @@ interface WakeDetectors {
 
 /** Captures the question the user asks after the wake word. */
 interface UtteranceCapture {
+    /**
+     * Whether the detector must hand the microphone over first.
+     *
+     * The two strategies genuinely differ. Android's recognizer opens its own
+     * microphone and the platform will not tolerate two at once, so the
+     * detector has to close first and reopen after - a short deaf window the
+     * earcon covers for. Reading raw PCM has no such problem: it is the same
+     * open stream, simply read past the wake word, so closing it would throw
+     * away the beginning of the question.
+     */
+    val needsExclusiveMic: Boolean
+
     /** The spoken question, or null when nothing was said. */
     suspend fun capture(): String?
     fun cancel()
+}
+
+/**
+ * Where captures come from.
+ *
+ * Takes the live [AudioSource] because a strategy may want to keep reading it
+ * rather than open one of its own.
+ */
+interface UtteranceCaptures {
+    fun create(mic: MicSource, source: AudioSource): UtteranceCapture
 }
 
 /** Runs a captured question to a spoken answer. Backed by TurnRunner. */

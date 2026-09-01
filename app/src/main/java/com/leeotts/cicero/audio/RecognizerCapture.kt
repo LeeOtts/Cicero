@@ -21,6 +21,9 @@ class RecognizerCapture(context: Context) : UtteranceCapture {
 
     private val helper = SpeechRecognizerHelper(context.applicationContext)
 
+    /** It opens its own microphone, so the detector's has to close first. */
+    override val needsExclusiveMic = true
+
     /** False on a device with no recognition service - some custom ROMs. */
     val available: Boolean get() = helper.available
 

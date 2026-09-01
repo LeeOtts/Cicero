@@ -26,7 +26,7 @@ import kotlin.coroutines.coroutineContext
 class WakeCoordinator(
     private val sources: AudioSources,
     private val detectors: WakeDetectors,
-    private val capture: UtteranceCapture,
+    private val captures: UtteranceCaptures,
     private val turns: TurnSink,
     private val feedback: WakeFeedback,
     private val dispatcher: CoroutineDispatcher,
@@ -90,6 +90,7 @@ class WakeCoordinator(
                 return
             }
         val source = sources.create(credentials.mic)
+        val capture = captures.create(credentials.mic, source)
         val buffer = FrameBuffer(detector.frameLength)
 
         try {
@@ -121,14 +122,16 @@ class WakeCoordinator(
                 }
                 if (!detected) continue
 
-                // The microphone is exclusive: the recognizer cannot have it
-                // while this source holds it. Closing here opens a ~300 ms deaf
-                // window, which is unavoidable and is exactly why the earcon
-                // exists - it tells the user when it is their turn.
                 buffer.reset()
-                source.close()
-                runTurn()
-                if (!source.open()) {
+                // Android's recognizer opens its own microphone and the
+                // platform allows only one, so this one has to go first. That
+                // costs a ~300 ms deaf window, which is exactly what the earcon
+                // is for. The raw-PCM strategy reads this same stream instead
+                // and must not have it closed underneath it.
+                val handOver = capture.needsExclusiveMic
+                if (handOver) source.close()
+                runTurn(capture)
+                if (handOver && !source.open()) {
                     onError("The ${source.description} did not reopen.")
                     return
                 }
@@ -140,7 +143,7 @@ class WakeCoordinator(
         }
     }
 
-    private suspend fun runTurn() {
+    private suspend fun runTurn(capture: UtteranceCapture) {
         // Barge-in, before the earcon so the two are never heard together: a
         // wake word during an answer means the user wants to say something
         // else, not to hear the rest of this.
