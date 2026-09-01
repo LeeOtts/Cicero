@@ -7,10 +7,16 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.leeotts.cicero.glasses.GlassesController
 import com.leeotts.cicero.glasses.MockGlassesSupport
+import com.meta.wearable.dat.mockdevice.MockDeviceKit
+import com.meta.wearable.dat.mockdevice.api.GlassesModel
+import com.meta.wearable.dat.mockdevice.api.MockDeviceKitInterface
+import com.meta.wearable.dat.mockdevice.api.MockGlasses
 import kotlinx.coroutines.runBlocking
+import kotlin.system.measureTimeMillis
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -63,6 +69,58 @@ class GlassesControllerTest {
     fun mockGlassesPairAndReportReady() {
         val status = MockGlassesSupport.enable(context)
         assertTrue("unexpected mock status: $status", status.startsWith("mock glasses ready"))
+    }
+
+    /**
+     * Regression test for a real-hardware bug: a session that fails almost
+     * immediately (glasses paired and powered but not worn) used to be
+     * indistinguishable from one that simply hangs - startAndAwaitStarted() only
+     * matched on STARTED, so it burned the full SESSION_TIMEOUT_MS waiting for a
+     * state that had already gone to STOPPED, and DeviceSession.errors was never
+     * observed at all. On real glasses this turned a ~100ms failure into a 15s
+     * (times two retries, 30s) one with no indication of why. A mock device that
+     * is paired and powered but never don()'d reproduces the same fast
+     * STARTING -> STOPPING/STOPPED transition deterministically.
+     */
+    @Test
+    fun captureFailsFastWhenGlassesAreUnreachable() = runBlocking {
+        val kit = MockDeviceKit.getInstance(context)
+        if (!kit.isEnabled) kit.enable()
+        unpairAll(kit)
+
+        var paired: MockGlasses? = null
+        kit.pairGlasses(GlassesModel.RAYBAN_META_OPTICS).fold(
+            onSuccess = { paired = it },
+            onFailure = { error, _ -> throw IllegalStateException("mock pair failed: $error") },
+        )
+        val device = requireNotNull(paired)
+        device.powerOn()
+        device.unfold()
+        // Deliberately not don() - not worn, so the session starts but the SDK
+        // ends it right away instead of ever reaching STARTED.
+        val controller = GlassesController()
+        var bitmap: android.graphics.Bitmap? = null
+        val elapsedMs = measureTimeMillis {
+            bitmap = try {
+                controller.capture()
+            } finally {
+                controller.release()
+            }
+        }
+
+        assertNull("expected capture() to fail against an unreachable device", bitmap)
+        assertTrue(
+            "capture() took ${elapsedMs}ms - the fail-fast path did not engage " +
+                "(old behaviour waited out the full 15s SESSION_TIMEOUT_MS per attempt, " +
+                "30s across both retries)",
+            elapsedMs < 5_000,
+        )
+
+        unpairAll(kit)
+    }
+
+    private fun unpairAll(kit: MockDeviceKitInterface) {
+        runCatching { kit.pairedDevices.toList().forEach { runCatching { kit.unpairDevice(it) } } }
     }
 
     @Test

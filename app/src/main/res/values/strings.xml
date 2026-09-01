@@ -43,11 +43,15 @@
     <string name="role_assistant">Assistant</string>
     <string name="role_tool">Tool</string>
     <string name="a11y_captured_photo">Captured photo</string>
+    <string name="history_delete">Delete conversation</string>
+    <string name="history_deleted">Conversation deleted</string>
+    <string name="history_cleared">History cleared</string>
 
     <!-- notes -->
     <string name="notes_empty_title">Nothing noted</string>
     <string name="notes_empty_body">Ask Cicero to remember something, or to remind you later. You can also add one yourself.</string>
     <string name="notes_deleted">Note deleted</string>
+    <string name="notes_cleared">All notes deleted</string>
     <string name="notes_delete">Delete note</string>
     <string name="notes_add">Add a note</string>
     <string name="notes_new_title">New note</string>
@@ -67,6 +71,9 @@
     <string name="glasses_registration">Registration: %1$s</string>
     <string name="glasses_registration_unknown">unknown</string>
     <string name="glasses_connect">Connect to Meta AI</string>
+    <string name="perm_camera_title">Camera</string>
+    <string name="perm_camera_body">The camera stream will not start without this, even though the video comes from the glasses rather than the phone\'s own camera.</string>
+    <string name="perm_camera_action">Allow camera</string>
     <string name="glasses_camera_granted">Camera granted</string>
     <string name="glasses_grant_camera">Grant camera access</string>
     <string name="glasses_enable_mock">Enable mock glasses (emulator)</string>
@@ -102,6 +109,13 @@
     <string name="theme_dark">Dark</string>
     <string name="settings_which_ai">Which AI answers?</string>
     <string name="settings_server_url">Server URL</string>
+    <string name="settings_tailscale_url">Tailscale address</string>
+    <string name="settings_tailscale_hint">Optional: the same server, reachable over Tailscale when the phone is off the home network.</string>
+    <string name="settings_local_url_auto">Auto</string>
+    <string name="settings_local_url_lan">Home</string>
+    <string name="settings_local_url_tailscale">Tailscale</string>
+    <string name="settings_local_url_auto_hint">Cicero tries the home address first and falls back to Tailscale when it cannot be reached, so leaving the house needs no change here.</string>
+    <string name="settings_local_url_fixed_hint">Always uses the address you picked, even when it cannot be reached.</string>
     <string name="settings_model_name">Model name</string>
     <string name="settings_models_loading">Looking for models\u2026</string>
     <string name="settings_models_none">No models are loaded on that server</string>
@@ -135,6 +149,17 @@
     <string name="settings_nest_refresh_token">Refresh token</string>
     <string name="settings_nest_test">Test Nest connection</string>
     <string name="settings_permissions">Permissions</string>
+
+    <!-- stored data -->
+    <string name="settings_data">Stored data</string>
+    <string name="settings_data_hint">Cicero keeps conversations and notes on this phone. Deleting them here does not touch your API keys or connected accounts.</string>
+    <string name="settings_clear_history">Delete all conversations</string>
+    <string name="settings_clear_notes">Delete all notes</string>
+    <string name="settings_clear_history_title">Delete all conversations?</string>
+    <string name="settings_clear_history_body">Every saved conversation, and any photos taken during them, will be deleted from this phone. This cannot be undone.</string>
+    <string name="settings_clear_notes_title">Delete all notes?</string>
+    <string name="settings_clear_notes_body">Every note and reminder will be deleted, and pending reminders will not fire. This cannot be undone.</string>
+    <string name="action_delete">Delete</string>
 
     <!-- permissions -->
     <string name="perm_granted">%1$s granted</string>

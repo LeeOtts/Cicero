@@ -79,6 +79,16 @@ fun GlassesScreen(
         ActivityResultContracts.RequestPermission(),
     ) { granted -> micGranted.value = granted }
 
+    // The Android permission, not the DAT one below: mwdat-camera's stream
+    // will not leave STARTING without it even though the frames come from the
+    // glasses, not the phone's own camera - it gates on this regardless.
+    val cameraOsGranted = rememberSystemFlag {
+        context.isGranted(Manifest.permission.CAMERA)
+    }
+    val cameraOsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> cameraOsGranted.value = granted }
+
     val cameraLauncher = rememberLauncherForActivityResult(
         Wearables.RequestPermissionContract(),
     ) { result ->
@@ -137,6 +147,14 @@ fun GlassesScreen(
             onClick = { context.findActivity()?.let(Wearables::startRegistration) },
             modifier = Modifier.fillMaxWidth(),
         ) { Text(stringResource(R.string.glasses_connect)) }
+
+        PermissionCard(
+            title = stringResource(R.string.perm_camera_title),
+            body = stringResource(R.string.perm_camera_body),
+            granted = cameraOsGranted.value,
+            actionLabel = stringResource(R.string.perm_camera_action),
+            onAction = { cameraOsLauncher.launch(Manifest.permission.CAMERA) },
+        )
 
         Button(
             onClick = { cameraLauncher.launch(Permission.CAMERA) },

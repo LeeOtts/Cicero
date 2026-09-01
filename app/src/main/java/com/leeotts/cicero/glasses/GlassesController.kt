@@ -17,6 +17,7 @@ import com.meta.wearable.dat.core.session.DeviceSessionState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -91,8 +92,9 @@ class GlassesController {
                 return camera
             }
             if (attempt == START_ATTEMPTS - 1) return fail(reason)
-            // Worth a second go, and cheap now that awaitStreaming() reports a
-            // stream that stopped rather than sitting out the whole timeout.
+            // Worth a second go, and cheap now that startAndAwaitStarted() and
+            // startAndAwaitStreaming() report a stopped session/stream rather
+            // than sitting out the whole timeout.
             Log.w(TAG, "GlassesController: $reason; retrying from a fresh session")
             releaseLocked()
         }
@@ -105,16 +107,13 @@ class GlassesController {
 
         val newSession = openSession() ?: return lastError ?: "createSession gave no session"
         session = newSession
-        newSession.start()
 
-        if (!newSession.awaitStarted()) return "session never reached STARTED"
+        newSession.startAndAwaitStarted()?.let { return it }
 
         val newCamera = attachCamera(newSession) ?: return lastError ?: "addCamera gave no camera"
         camera = newCamera
 
-        if (!startStream(newCamera)) return lastError ?: "stream.start failed"
-
-        return newCamera.awaitStreaming()
+        return newCamera.startAndAwaitStreaming()
     }
 
     /** Captures a single still, warming the session up first if needed. */
@@ -134,11 +133,15 @@ class GlassesController {
      * Bitmap or raw HEIC bytes depending on the device and stream config.
      */
     private fun PhotoData.toBitmap(): AndroidBitmap? = when (this) {
-        is PhotoData.Bitmap -> bitmap
+        is PhotoData.Bitmap -> bitmap.also {
+            Log.i(TAG, "toBitmap: PhotoData.Bitmap ${it.width}x${it.height}")
+        }
         is PhotoData.HEIC -> {
             val bytes = ByteArray(data.remaining())
             data.duplicate().get(bytes)
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.also {
+                Log.i(TAG, "toBitmap: PhotoData.HEIC ${it.width}x${it.height}, ${bytes.size} bytes")
+            }
         }
     }
 
@@ -177,12 +180,32 @@ class GlassesController {
     }
 
     private fun openSession(): DeviceSession? {
+        logDeviceSnapshot()
         var out: DeviceSession? = null
         Wearables.createSession(AutoDeviceSelector()).fold(
             onSuccess = { out = it },
             onFailure = { error, _ -> lastError = "createSession: ${error.description}" },
         )
         return out
+    }
+
+    /**
+     * Logs what the SDK itself sees, ahead of createSession(): NO_ELIGIBLE_DEVICE
+     * only ever says AutoDeviceSelector found nothing to pick, never why. The
+     * Meta AI app's own "connected" state is a different boundary - a device can
+     * show connected there while carrying a link state or compatibility flag
+     * this SDK call rejects, and this is the only place that distinction shows.
+     */
+    private fun logDeviceSnapshot() {
+        val ids = Wearables.devices.value
+        if (ids.isEmpty()) {
+            Log.i(TAG, "GlassesController: Wearables.devices is empty")
+            return
+        }
+        ids.forEach { id ->
+            val device = Wearables.devicesMetadata[id]?.value
+            Log.i(TAG, "GlassesController: device $id -> $device")
+        }
     }
 
     private fun attachCamera(session: DeviceSession): Camera? {
@@ -198,38 +221,75 @@ class GlassesController {
         return out
     }
 
-    private fun startStream(camera: Camera): Boolean {
-        var ok = false
-        camera.stream.start().fold(
-            onSuccess = { ok = true },
-            onFailure = { error, _ -> lastError = "stream.start: ${error.description}" },
-        )
-        return ok
+    /**
+     * Starts the session and waits for STARTED, or returns why not.
+     *
+     * The error collector is attached *before* start() runs: [DeviceSession.errors]
+     * is a SharedFlow with no replay, so starting first can lose an error
+     * emitted before anything is listening. DeviceSessionState alone can't say
+     * why a session stopped either - NO_ELIGIBLE_DEVICE, DEVICE_DISCONNECTED and
+     * a thermal shutdown all just look like STOPPED without it.
+     *
+     * Only a STOPPING/STOPPED seen *after* a non-terminal state counts as giving
+     * up, matching [startAndAwaitStreaming] below: the state StateFlow replays
+     * its pre-start value to every new collector, so accepting a bare STOPPED
+     * would match that replay and return before start() has had any effect. On
+     * real glasses this state can flip STARTING -> STOPPED within ~100ms; the
+     * old code waited out the full timeout regardless because it only matched
+     * on STARTED.
+     */
+    private suspend fun DeviceSession.startAndAwaitStarted(): String? = coroutineScope {
+        var sdkReason: String? = null
+        val errorJob = launch { errors.collect { sdkReason = it.description } }
+        start()
+
+        var moved = false
+        val reached = withTimeoutOrNull(SESSION_TIMEOUT_MS) {
+            state
+                .onEach { Log.d(TAG, "session state -> $it") }
+                .first { s ->
+                    when (s) {
+                        DeviceSessionState.STARTED -> true
+                        DeviceSessionState.STOPPING, DeviceSessionState.STOPPED -> moved
+                        else -> {
+                            moved = true
+                            false
+                        }
+                    }
+                }
+        }
+        errorJob.cancel()
+
+        when (reached) {
+            DeviceSessionState.STARTED -> null
+            null -> "session never reached STARTED"
+            else -> sdkReason?.let { "session stopped: $it" }
+                ?: "session stopped before starting (reached $reached)"
+        }
     }
 
     /**
-     * These wait ONLY for the positive target state and rely on the timeout for
-     * failure. Both flows are StateFlows, so a predicate that also accepts the
-     * idle state (STOPPED / IDLE) matches the *current* value immediately and
-     * returns before start() has had any effect.
-     */
-    private suspend fun DeviceSession.awaitStarted(): Boolean =
-        withTimeoutOrNull(SESSION_TIMEOUT_MS) {
-            state
-                .onEach { Log.d(TAG, "session state -> $it") }
-                .first { it == DeviceSessionState.STARTED }
-        } != null
-
-    /**
-     * Returns null once streaming, or the reason it will not.
+     * Starts the stream and waits for STREAMING, or returns why not.
      *
-     * A stream that gives up reports STOPPED rather than hanging, so waiting out
-     * the whole timeout after that only delays the failure and describes it
-     * wrongly. The first STOPPED is the pre-start value every StateFlow replays,
-     * so only one seen *after* the stream has moved counts as giving up - the
-     * mock does exactly that, within a second, when CAMERA is not granted.
+     * Mirrors [startAndAwaitStarted]: the error collector on [Stream.errorStream]
+     * attaches before start() runs, and only a STOPPED/CLOSED seen after the
+     * stream has moved past its replayed pre-start value counts as giving up -
+     * the mock does exactly that, within a second, when CAMERA is not granted.
      */
-    private suspend fun Camera.awaitStreaming(): String? {
+    private suspend fun Camera.startAndAwaitStreaming(): String? = coroutineScope {
+        var sdkReason: String? = null
+        val errorJob = launch { stream.errorStream.collect { sdkReason = it.description } }
+
+        var startOk = false
+        stream.start().fold(
+            onSuccess = { startOk = true },
+            onFailure = { error, _ -> sdkReason = error.description },
+        )
+        if (!startOk) {
+            errorJob.cancel()
+            return@coroutineScope sdkReason?.let { "stream.start: $it" } ?: "stream.start failed"
+        }
+
         var moved = false
         val reached = withTimeoutOrNull(STREAM_TIMEOUT_MS) {
             stream.state
@@ -245,10 +305,13 @@ class GlassesController {
                     }
                 }
         }
-        return when (reached) {
+        errorJob.cancel()
+
+        when (reached) {
             StreamState.STREAMING -> null
             null -> "stream never reached STREAMING"
-            else -> "stream gave up before streaming (reached $reached)"
+            else -> sdkReason?.let { "stream stopped: $it" }
+                ?: "stream gave up before streaming (reached $reached)"
         }
     }
 
