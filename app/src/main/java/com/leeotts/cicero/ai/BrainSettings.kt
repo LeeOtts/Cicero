@@ -6,9 +6,13 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.leeotts.cicero.BuildConfig
+import com.leeotts.cicero.audio.ArmingRules
+import com.leeotts.cicero.audio.MicSource
 import com.leeotts.cicero.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -70,8 +74,34 @@ data class BrainConfig(
     /** On by default: usually one machine serves both, so one address is enough. */
     val whisperSameServer: Boolean = true,
 
+    // --- "Hey Cicero" ------------------------------------------------------
+    // Every default here is what the app did before the wake word existed, so
+    // an upgrading install needs no migration: absent keys read back as these.
+    val wakeEnabled: Boolean = false,
+    val wakeMic: MicSource = MicSource.PHONE,
+    val wakeSensitivity: Float = 0.5f,
+    /** Picovoice access key. Encrypted at rest, like the provider keys. */
+    val wakeAccessKey: String = "",
+    /**
+     * The largest battery saving in the feature, hence on by default: with the
+     * glasses disconnected there is nothing to look at, so nothing to listen
+     * for. Turning it off is a real cost and the UI says so.
+     */
+    val wakeArmOnlyWithGlasses: Boolean = true,
+    /** Percent below which listening stops, unless the phone is charging. */
+    val wakeBatteryFloor: Int = 20,
+    /** Skips the phone's input DSP: cheaper, possibly less accurate. */
+    val wakeUnprocessedAudio: Boolean = false,
+
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
 ) {
+    /** What the arming policy needs, without it having to know about this class. */
+    val armingRules: ArmingRules
+        get() = ArmingRules(
+            armOnlyWithGlasses = wakeArmOnlyWithGlasses,
+            batteryFloor = wakeBatteryFloor,
+        )
+
     val provider: Provider get() = Providers.byId(providerId)
 
     /**
@@ -214,6 +244,18 @@ private val WHISPER_URL = stringPreferencesKey("whisper_url")
 private val WHISPER_MODEL = stringPreferencesKey("whisper_model")
 private val WHISPER_SAME = booleanPreferencesKey("whisper_same_server")
 private val THEME_MODE = stringPreferencesKey("theme_mode")
+private val WAKE_ENABLED = booleanPreferencesKey("wake_enabled")
+private val WAKE_MIC = stringPreferencesKey("wake_mic")
+private val WAKE_SENSITIVITY = floatPreferencesKey("wake_sensitivity")
+private val WAKE_ARM_WITH_GLASSES = booleanPreferencesKey("wake_arm_only_with_glasses")
+private val WAKE_BATTERY_FLOOR = intPreferencesKey("wake_battery_floor")
+private val WAKE_UNPROCESSED = booleanPreferencesKey("wake_unprocessed_audio")
+
+// Its own encrypted key rather than a tenth entry in the provider catalog:
+// toConfig and write iterate Providers.all, so a non-provider id there would
+// never be read back - and inventing a fake provider to carry it would break
+// the rule that adding a provider is one line and nothing else.
+private val WAKE_ACCESS_KEY = stringPreferencesKey("wake_access_key")
 
 // Not part of BrainConfig: a half-finished sign-in is transient, and nothing in
 // the UI should be able to observe it as settings state.
@@ -258,10 +300,20 @@ internal fun Preferences.toConfig(secrets: Secrets): BrainConfig {
         whisperSameServer = this[WHISPER_SAME] ?: defaults.whisperSameServer,
         themeMode = this[THEME_MODE]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
             ?: defaults.themeMode,
+        wakeEnabled = this[WAKE_ENABLED] ?: defaults.wakeEnabled,
+        wakeMic = this[WAKE_MIC]?.let { runCatching { MicSource.valueOf(it) }.getOrNull() }
+            ?: defaults.wakeMic,
+        wakeSensitivity = this[WAKE_SENSITIVITY] ?: defaults.wakeSensitivity,
+        wakeAccessKey = this[WAKE_ACCESS_KEY].orEmpty().ifBlank { null }
+            ?.let { secrets.decrypt(it) }.orEmpty(),
+        wakeArmOnlyWithGlasses = this[WAKE_ARM_WITH_GLASSES] ?: defaults.wakeArmOnlyWithGlasses,
+        wakeBatteryFloor = this[WAKE_BATTERY_FLOOR] ?: defaults.wakeBatteryFloor,
+        wakeUnprocessedAudio = this[WAKE_UNPROCESSED] ?: defaults.wakeUnprocessedAudio,
     )
 }
 
-private fun MutablePreferences.write(next: BrainConfig, secrets: Secrets) {
+/** Internal, like [toConfig], so the round trip can be driven from a test. */
+internal fun MutablePreferences.write(next: BrainConfig, secrets: Secrets) {
     this[PROVIDER_ID] = next.providerId
     Providers.all.forEach { p ->
         // Removing rather than writing a blank means clearing a field genuinely
@@ -296,6 +348,18 @@ private fun MutablePreferences.write(next: BrainConfig, secrets: Secrets) {
     this[WHISPER_MODEL] = next.whisperModel
     this[WHISPER_SAME] = next.whisperSameServer
     this[THEME_MODE] = next.themeMode.name
+    this[WAKE_ENABLED] = next.wakeEnabled
+    this[WAKE_MIC] = next.wakeMic.name
+    this[WAKE_SENSITIVITY] = next.wakeSensitivity
+    this[WAKE_ARM_WITH_GLASSES] = next.wakeArmOnlyWithGlasses
+    this[WAKE_BATTERY_FLOOR] = next.wakeBatteryFloor
+    this[WAKE_UNPROCESSED] = next.wakeUnprocessedAudio
+    // Cleared rather than blanked, so removing the key really removes it.
+    if (next.wakeAccessKey.isBlank()) {
+        remove(WAKE_ACCESS_KEY)
+    } else {
+        this[WAKE_ACCESS_KEY] = secrets.encrypt(next.wakeAccessKey)
+    }
     this[MIGRATED] = true
 }
 
