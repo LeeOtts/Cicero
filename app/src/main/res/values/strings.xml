@@ -89,7 +89,7 @@
     <string name="glasses_mic_share">Share recordings</string>
     <string name="glasses_mic_share_title">Microphone probe recordings</string>
     <string name="perm_microphone_title">Microphone</string>
-    <string name="perm_microphone_body">Needed to record from the glasses microphone. Nothing is recorded until you press the probe button.</string>
+    <string name="perm_microphone_body">Needed to listen for “Hey Cicero” and to record from the glasses microphone. Nothing is recorded until you turn the wake word on or press the probe button.</string>
     <string name="perm_microphone_action">Allow microphone</string>
     <string name="glasses_capturing">Capturing\u2026</string>
     <string name="glasses_take_photo">Take photo</string>
@@ -188,4 +188,41 @@
     <!-- form fields -->
     <string name="a11y_show_field">Show %1$s</string>
     <string name="a11y_hide_field">Hide %1$s</string>
+    <!-- "Hey Cicero" wake word -->
+    <string name="wake_channel_name">Wake word</string>
+    <string name="wake_action_stop">Stop listening</string>
+    <string name="wake_status_starting">Starting…</string>
+    <string name="wake_status_armed">Listening for “Hey Cicero”</string>
+    <string name="wake_status_listening_question">Listening…</string>
+    <string name="wake_status_thinking">Thinking…</string>
+    <string name="wake_status_answering">Answering…</string>
+    <string name="wake_status_paused">Paused</string>
+    <string name="wake_status_paused_glasses">Paused — glasses disconnected</string>
+    <string name="wake_status_paused_battery">Paused — battery low</string>
+    <string name="wake_status_paused_call">Paused — call in progress</string>
+    <string name="wake_status_paused_mic">Paused — microphone in use</string>
+
+    <string name="settings_wake_title">Hey Cicero</string>
+    <string name="settings_wake_enable">Listen for “Hey Cicero”</string>
+    <string name="settings_wake_enable_hint">Starts when you open Cicero. Android will not let an app start listening on its own, so it does not survive a reboot until you open the app again.</string>
+    <string name="settings_wake_access_key">Picovoice access key</string>
+    <string name="settings_wake_access_key_hint">Free for personal use from console.picovoice.ai. Checked online the first time it starts; detection is on-device after that.</string>
+    <string name="settings_wake_keyword_installed">Keyword installed</string>
+    <string name="settings_wake_keyword_missing">No keyword installed — train “Hey Cicero” for Android and import it</string>
+    <string name="settings_wake_keyword_import">Import keyword…</string>
+    <string name="settings_wake_mic">Microphone</string>
+    <string name="settings_wake_mic_phone">Phone</string>
+    <string name="settings_wake_mic_glasses">Glasses</string>
+    <string name="settings_wake_mic_glasses_warning">Takes the microphone from Meta AI for as long as it runs, so “Hey Meta” stops working. Glasses audio drops to call quality and both batteries drain faster. Untested against the camera.</string>
+    <string name="settings_wake_sensitivity">Sensitivity</string>
+    <string name="settings_wake_sensitivity_hint">Higher catches the phrase more often and mishears more often too.</string>
+    <string name="settings_wake_battery_title">Battery</string>
+    <string name="settings_wake_arm_with_glasses">Only listen when the glasses are connected</string>
+    <string name="settings_wake_arm_with_glasses_hint">The largest saving there is. An open microphone costs 5–10%% of the battery an hour, and with the glasses away there is nothing to look at anyway.</string>
+    <string name="settings_wake_battery_floor">Stop listening below %1$d%%</string>
+    <string name="settings_wake_battery_floor_hint">Ignored while charging.</string>
+    <string name="settings_wake_unprocessed">Use unprocessed audio</string>
+    <string name="settings_wake_unprocessed_hint">Skips the phone’s input processing. Draws a little less power; may hear less well in a noisy room.</string>
+    <string name="settings_wake_battery_optimisation">Exempt from battery optimisation…</string>
+    <string name="settings_wake_battery_optimisation_hint">Some phones stop background listening regardless of the notification. This asks Android not to — the opposite of the settings above, and only worth it if listening keeps stopping.</string>
 </resources>

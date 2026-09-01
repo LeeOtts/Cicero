@@ -52,6 +52,9 @@ android {
         buildConfigField("String", "GEMINI_API_KEY", "\"${secret("gemini_api_key")}\"")
     }
 
+    // A compressed keyword is unreadable to Porcupine, which memory-maps it.
+    androidResources { noCompress += "ppn" }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -100,6 +103,11 @@ dependencies {
 
     implementation(libs.maplibre.android)
     implementation(libs.play.services.location)
+
+    // Wake word. The keyword file it loads is trained per-platform on the
+    // Picovoice console and lives in assets; see the porcupine pin for why the
+    // engine version and the keyword version have to move together.
+    implementation(libs.porcupine.android)
 
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)

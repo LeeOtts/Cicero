@@ -14,3 +14,7 @@
 .cxx
 local.properties
 .kotlin
+
+# Wake-word keyword: issued per Picovoice account, not shared. See
+# app/src/main/assets/porcupine/README.md.
+*.ppn

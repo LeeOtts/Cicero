@@ -7,6 +7,8 @@ import com.leeotts.cicero.home.NestController
 import com.leeotts.cicero.location.DestinationLog
 import com.leeotts.cicero.location.LocationProvider
 import com.meta.wearable.dat.core.Wearables
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 const val TAG = "Cicero"
 
@@ -41,6 +43,25 @@ class CiceroApp : Application() {
      * its own device cache, and spend that budget twice over.
      */
     val nest: NestController by lazy { NestController(this) }
+
+    /**
+     * Whether any glasses are currently paired and reachable.
+     *
+     * The wake word's battery policy is built on this: with the glasses in a
+     * drawer there is nothing to look at, so holding the microphone open buys
+     * nothing and costs 5-10% of the battery an hour. Gating on it is the
+     * single largest saving in that feature.
+     *
+     * Free to observe. The SDK already maintains this set, so there is no
+     * polling and no extra receiver - which matters, because a periodic check
+     * would itself be the wakeup the policy exists to avoid.
+     *
+     * Note this is a looser boundary than GlassesController's: a device here
+     * may still be refused by createSession. That is the right test for "is
+     * there any point listening", which is all it is used for.
+     */
+    val glassesConnected: Flow<Boolean> =
+        Wearables.devices.map { it.isNotEmpty() }
 
     override fun onCreate() {
         super.onCreate()

@@ -15,6 +15,17 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
+    <!--
+      "Hey Cicero". A microphone-typed foreground service is the only way
+      Android allows an app to hear anything with the screen off, and from
+      API 34 the typed permission is required as well as the generic one.
+      The service itself costs almost nothing; it is the open microphone that
+      drains, which is why the arming policy closes the microphone and leaves
+      the service running.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
     <!-- The glasses expose no GPS, so position comes from the phone. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -110,6 +121,17 @@
         <receiver
             android:name=".tools.ReminderReceiver"
             android:exported="false" />
+
+        <!--
+          Started only from the Settings toggle or MainActivity. API 31 forbids
+          starting a foreground service from the background and API 34 rejects a
+          microphone-typed one unless the app is in the foreground, so there is
+          deliberately no boot receiver and the service is never START_STICKY.
+        -->
+        <service
+            android:name=".audio.WakeService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!--
           Notification Access does double duty. It is the only way to enumerate

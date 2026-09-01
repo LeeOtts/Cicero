@@ -31,6 +31,10 @@ navigation = "2.8.5"
 maplibre = "13.5.1"
 # Fused location is free and keyless; only the Maps SDK needed billing.
 playServicesLocation = "21.4.0"
+# Wake word. The .ppn keyword file format is versioned WITH the engine: a
+# keyword trained against a different major version loads and then never fires,
+# and it fails at runtime rather than at build time. Re-train on any bump.
+porcupine = "3.0.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -60,6 +64,7 @@ androidx-browser = { group = "androidx.browser", name = "browser", version.ref =
 
 maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "maplibre" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+porcupine-android = { group = "ai.picovoice", name = "porcupine-android", version.ref = "porcupine" }
 
 mwdat-core = { group = "com.meta.wearable", name = "mwdat-core", version.ref = "mwdat" }
 mwdat-camera = { group = "com.meta.wearable", name = "mwdat-camera", version.ref = "mwdat" }

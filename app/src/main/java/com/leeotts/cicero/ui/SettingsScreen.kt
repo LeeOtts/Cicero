@@ -234,6 +234,9 @@ fun SettingsScreen(
         }
         nestTestResult?.let { TestResultRow(it) }
 
+        SectionHeader(stringResource(R.string.settings_wake_title))
+        WakeWordSection(config = config, onUpdate = onUpdate)
+
         SectionHeader(stringResource(R.string.settings_data))
         Hint(stringResource(R.string.settings_data_hint))
         DataSection(onClearHistory = onClearHistory, onClearNotes = onClearNotes)
@@ -572,7 +575,7 @@ private fun TestResultRow(result: TestResult) {
 }
 
 @Composable
-private fun Hint(text: String) {
+internal fun Hint(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
