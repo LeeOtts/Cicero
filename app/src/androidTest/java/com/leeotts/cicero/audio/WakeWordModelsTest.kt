@@ -134,8 +134,11 @@ class WakeWordModelsTest {
         // half, and the half the battery argument rests on - actually runs.
         val ms = perChunkMs(amplitude = 3000)
 
+        // ~3.5 ms on an SM-A356U. The ceiling leaves room for a slower phone
+        // and for thermal throttling, while still catching the kind of
+        // regression that reintroduces per-chunk allocation.
         Log.i(TAG, "wake word speech: %.2f ms per 80 ms chunk".format(ms))
-        assertTrue("no real-time headroom: $ms ms per 80 ms", ms < 30.0)
+        assertTrue("no real-time headroom: $ms ms per 80 ms", ms < 15.0)
     }
 
     @Test
@@ -148,7 +151,10 @@ class WakeWordModelsTest {
         val speech = perChunkMs(amplitude = 3000)
 
         Log.i(TAG, "wake word idle: %.2f ms, speech: %.2f ms".format(idle, speech))
-        assertTrue("idle should be cheaper than speech: $idle vs $speech", idle < speech)
-        assertTrue("idle is not cheap enough to run all day: $idle ms", idle < 10.0)
+        // ~0.5 ms against ~3.5 ms measured, so the gate saves roughly seven
+        // eighths of the work in the state the phone spends nearly all day in.
+        // Losing that is the regression this guards against.
+        assertTrue("idle should be cheaper than speech: $idle vs $speech", idle < speech / 2)
+        assertTrue("idle is not cheap enough to run all day: $idle ms", idle < 4.0)
     }
 }
