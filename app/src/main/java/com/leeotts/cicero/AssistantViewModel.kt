@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -77,12 +78,25 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     private val destinations = getApplication<CiceroApp>().destinations
     private val nest = getApplication<CiceroApp>().nest
     private val speaker = Speaker(app)
+    // Process-scoped, because it describes one microphone; see CiceroApp.voice.
+    private val voice = getApplication<CiceroApp>().voice
     private val auth = OpenRouterAuth(settings)
 
     init {
         // Replayed, because the app is often killed while the browser is in
         // front: the callback activity can run before this ViewModel exists.
         viewModelScope.launch { OAuthResult.codes.collect(::onAuthCode) }
+
+        // What stops the wake word listening to Cicero. The Ask screen does the
+        // same for the recognizer's microphone; this is the other half of it.
+        viewModelScope.launch { speaker.speaking.collect(voice::holdSpeaker) }
+
+        // The only way a failure to speak can be reported. Everything else the
+        // assistant has to say, it says out loud - which is no use at all when
+        // the thing that is broken is saying things out loud.
+        viewModelScope.launch {
+            speaker.problem.filterNotNull().collect { _messages.send(UiMessage(text = it)) }
+        }
     }
 
     /** True while an answer is being read aloud. */
@@ -370,6 +384,9 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
             brain = brain,
             nest = nest.gateway,
         ),
+        // Through speakCue rather than speak, so the answer flushes whatever
+        // is still being said and a lost cue never reaches the snackbar.
+        onProgress = speaker::speakCue,
     )
 
     /** Cuts off an answer mid-sentence, for when it is long or unwanted. */
@@ -377,6 +394,11 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         speaker.shutdown()
+        // Explicitly, and not as a formality. The collector above dies with the
+        // scope, so a ViewModel cleared mid-answer would leave the flag stuck
+        // true and the wake word deaf until the process restarted - the same
+        // shape of bug as an abandoned listen request, one flag over.
+        voice.holdSpeaker(false)
         super.onCleared()
     }
 

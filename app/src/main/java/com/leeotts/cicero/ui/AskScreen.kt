@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.leeotts.cicero.Exchange
 import com.leeotts.cicero.R
+import com.leeotts.cicero.audio.Cues
 import com.leeotts.cicero.audio.SpeechRecognizerHelper
 import com.leeotts.cicero.ui.components.Bubble
 import com.leeotts.cicero.ui.components.EmptyState
@@ -80,6 +81,10 @@ fun AskScreen(
     val context = LocalContext.current
     val recognizer = remember { SpeechRecognizerHelper(context) }
     DisposableEffect(Unit) { onDispose { recognizer.destroy() } }
+    // Beside the recognizer because they mark the same two moments, and because
+    // both hold something native that has to be handed back.
+    val cues = remember { Cues() }
+    DisposableEffect(Unit) { onDispose { cues.release() } }
     val listening by recognizer.listening.collectAsStateWithLifecycle()
     val speechAvailable = remember { recognizer.available }
 
@@ -100,8 +105,17 @@ fun AskScreen(
      * mic button is theirs to edit first.
      */
     fun beginListening(autoSend: Boolean = false) {
+        // The wake word cannot interrupt an answer - the gate is shut while
+        // Cicero talks, so the service is not recording - which leaves this as
+        // the way to cut one short. Idempotent when nothing is being said.
+        onStopSpeaking()
+        // Fired in the same frame as the capture starts rather than before it.
+        // The wake word has already gone off, so the user is speaking now, and
+        // a quarter second of held-back microphone would clip the first word.
+        cues.listening()
         recognizer.start(
             onFinal = { text ->
+                cues.heard()
                 question = text
                 // A question asked while the previous answer is still in flight
                 // is dropped silently by ask(). Leave it in the field to be sent

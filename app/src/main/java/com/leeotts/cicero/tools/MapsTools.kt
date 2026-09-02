@@ -38,6 +38,8 @@ class WhereAmITool(
         description = "Find out where the user is right now. Use this before answering " +
             "anything that depends on their location, and before finding places nearby.",
         parameters = Schemas.empty,
+        // A cold GPS fix indoors can take a while, or never arrive at all.
+        progressPhrase = "Finding where you are.",
     )
 
     override suspend fun run(arguments: JsonObject): ToolOutcome {
@@ -133,6 +135,7 @@ class FindNearbyTool(
             "query" to Schemas.string("What to look for, for example \"coffee\" or \"pharmacy\""),
             required = listOf("query"),
         ),
+        progressPhrase = "Looking at what is nearby.",
     )
 
     override suspend fun run(arguments: JsonObject): ToolOutcome {

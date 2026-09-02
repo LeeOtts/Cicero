@@ -28,6 +28,14 @@ class Assistant(
     private val transcriber: Transcriber,
     private val tools: List<Tool> = emptyList(),
     private val systemPrompt: String = DEFAULT_SYSTEM_PROMPT,
+    /**
+     * Told what is about to run, so something can be said out loud.
+     *
+     * A turn can spend ten seconds taking a photo and asking a model about it,
+     * and ten silent seconds after a wake word is indistinguishable from a wake
+     * word that did nothing. Defaulted, because nothing outside the app cares.
+     */
+    private val onProgress: (String) -> Unit = {},
 ) {
 
     data class Result(
@@ -80,7 +88,9 @@ class Assistant(
         var lastImage: Image? = null
 
         repeat(MAX_TOOL_ROUNDS) { round ->
+            val askedAt = System.currentTimeMillis()
             val reply = brain.respond(effectiveSystem, history, advertised)
+            val thinkingMs = System.currentTimeMillis() - askedAt
 
             if (!reply.wantsTools) {
                 val spoken = reply.text?.trim().orEmpty().ifBlank {
@@ -92,6 +102,7 @@ class Assistant(
 
             history += Msg.Assistant(reply.text, reply.toolCalls)
             Log.d(TAG, "round $round: running ${reply.toolCalls.map { it.name }}")
+            announce(round, thinkingMs, reply.toolCalls)
 
             reply.toolCalls.forEach { call ->
                 val tool = byName[call.name]
@@ -123,9 +134,33 @@ class Assistant(
         return Result(spoken, transcript, history, lastImage)
     }
 
+    /**
+     * Says what is about to happen, but only on a turn that is already slow.
+     *
+     * A model that decided in three hundred milliseconds to set a timer is
+     * finished before a cue would be: announcing every tool call turns an
+     * assistant into something that narrates its own plumbing. So this waits
+     * for evidence the user is already waiting, and only on the first round -
+     * by the second, something has been said.
+     */
+    private fun announce(round: Int, thinkingMs: Long, calls: List<ToolCall>) {
+        if (round != 0 || thinkingMs < PROGRESS_AFTER_MS) return
+        // Looked up through the registered spec, so a hallucinated tool name
+        // never gets read out - it has no phrase, and is skipped.
+        val phrase = calls.firstNotNullOfOrNull { byName[it.name]?.spec?.progressPhrase } ?: return
+        onProgress(phrase)
+    }
+
     companion object {
         /** Enough for look-then-answer plus a couple of follow-on actions. */
         const val MAX_TOOL_ROUNDS = 5
+
+        /**
+         * How long a round has to have taken before its tools are worth
+         * announcing. Long enough that the pause is noticeable from behind a
+         * pair of glasses, short enough to land before the tool finishes.
+         */
+        const val PROGRESS_AFTER_MS = 2_000L
 
         val NO_WEB_SEARCH = """
             You cannot search the web. If an answer depends on current
@@ -150,6 +185,10 @@ class Assistant(
             Use the look tool when the question is about what the user can see.
             If an image is too dark or blurry to answer from, say that plainly
             instead of inventing detail.
+
+            Cicero plays a tone when the microphone opens, and says a short
+            phrase of its own while a slow tool runs. Do not narrate what you
+            are about to do - answer the question.
         """.trimIndent()
     }
 }

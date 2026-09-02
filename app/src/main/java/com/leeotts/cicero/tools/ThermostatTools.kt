@@ -20,6 +20,8 @@ class GetThermostatTool(private val nest: NestGateway) : Tool {
         description = "Read the house thermostat: the temperature and humidity indoors, " +
             "which mode it is in, what it is set to, and whether it is running.",
         parameters = Schemas.empty,
+        // A round trip to Google's SDM API, over whatever network is to hand.
+        progressPhrase = "Checking the thermostat.",
     )
 
     override suspend fun run(arguments: JsonObject): ToolOutcome = guarded {
@@ -50,6 +52,8 @@ class SetThermostatTool(private val nest: NestGateway) : Tool {
                 listOf("heat", "cool", "heatcool", "off", "eco"),
             ),
         ),
+        // Reads the state before it writes, so two round trips rather than one.
+        progressPhrase = "Setting the thermostat.",
     )
 
     override suspend fun run(arguments: JsonObject): ToolOutcome = guarded {

@@ -7,6 +7,15 @@ data class ToolSpec(
     val name: String,
     val description: String,
     val parameters: JsonObject,
+    /**
+     * Said aloud while this tool runs, on the tools slow enough to be worth
+     * announcing. Null on the quick ones - narrating an alarm being set takes
+     * longer than setting it.
+     *
+     * A phrase, never the tool's name. It is read to someone wearing glasses,
+     * and it has to survive a model asking for a tool that does not exist.
+     */
+    val progressPhrase: String? = null,
 )
 
 /** A tool invocation requested by the model. */

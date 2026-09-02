@@ -41,6 +41,18 @@
             <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
+    <!--
+      The same rule hides the speech engine. TextToSpeech finds engines with
+      queryIntentServices, and on targetSdk 30+ a package this app cannot see
+      does not exist: the constructor reports ERROR and the only trace is a log
+      line. Google's engine happens to be forceQueryable on this phone, which
+      is luck rather than a contract.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
 
 
     <application

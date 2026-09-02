@@ -85,6 +85,10 @@ class LookTool(private val glasses: GlassesController) : Tool {
         description = "Take a photo through the glasses camera to see what the user is looking at. " +
             "Use this whenever the question is about the user's surroundings.",
         parameters = Schemas.empty,
+        // Opening a DAT session, capturing and tearing it down again is the
+        // slowest thing Cicero does, and it happens while the user is standing
+        // there looking at whatever they asked about.
+        progressPhrase = "Having a look.",
     )
 
     override suspend fun run(arguments: JsonObject): ToolOutcome {

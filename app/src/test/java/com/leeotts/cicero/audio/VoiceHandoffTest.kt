@@ -10,6 +10,10 @@ import org.junit.Test
  * The rule this pins down was found on a phone: two "Hey Jarvis" utterances
  * five seconds apart, and the second was detected while the recognizer from
  * the first was still listening. Both were reading the same microphone.
+ *
+ * The speaker is arbitrated here for the same reason, found the same way: with
+ * the gate open while Cicero talked, the service recorded the answer and scored
+ * the models against Cicero's own voice.
  */
 class VoiceHandoffTest {
 
@@ -20,6 +24,7 @@ class VoiceHandoffTest {
                 glassesConnected = true,
                 micHeld = false,
                 listenRequested = false,
+                speaking = false,
             ),
         )
     }
@@ -31,6 +36,7 @@ class VoiceHandoffTest {
                 glassesConnected = false,
                 micHeld = false,
                 listenRequested = false,
+                speaking = false,
             ),
         )
     }
@@ -42,6 +48,7 @@ class VoiceHandoffTest {
                 glassesConnected = true,
                 micHeld = true,
                 listenRequested = false,
+                speaking = false,
             ),
         )
     }
@@ -57,6 +64,7 @@ class VoiceHandoffTest {
                 glassesConnected = true,
                 micHeld = false,
                 listenRequested = true,
+                speaking = false,
             ),
         )
     }
@@ -131,9 +139,70 @@ class VoiceHandoffTest {
         assertFalse(gateFor(voice))
     }
 
+    @Test
+    fun `the wake word does not listen while Cicero is talking`() {
+        // The regression. Nothing holds the microphone during an answer - the
+        // recognizer finished long before - so every other term says the gate
+        // is free, and the service happily records Cicero talking to itself.
+        assertFalse(
+            shouldListenForWakeWord(
+                glassesConnected = true,
+                micHeld = false,
+                listenRequested = false,
+                speaking = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `a released speaker reopens the gate`() {
+        val voice = VoiceHandoff()
+        voice.holdSpeaker(true)
+        assertFalse(gateFor(voice))
+
+        voice.holdSpeaker(false)
+        assertTrue("the answer is over, the wake word may listen again", gateFor(voice))
+    }
+
+    @Test
+    fun `holding the speaker twice changes nothing`() {
+        val voice = VoiceHandoff()
+        voice.holdSpeaker(true)
+        voice.holdSpeaker(true)
+
+        assertTrue(voice.speaking.value)
+        assertFalse(gateFor(voice))
+    }
+
+    @Test
+    fun `an answer that arrives mid-hand-off keeps the gate shut on its own`() {
+        // Both reasons at once, which is the shape that catches an
+        // implementation that only ANDs speaking into an existing branch.
+        val voice = VoiceHandoff()
+        voice.requestListening()
+        voice.takeListenRequest()
+        voice.holdSpeaker(true)
+        voice.holdMicrophone(false)
+
+        assertFalse("still talking, so still busy", gateFor(voice))
+    }
+
+    @Test
+    fun `the tail must stay shorter than the hand-off grace period`() {
+        // Not arithmetic for its own sake. The service abandons an unclaimed
+        // hand-off after the grace period; a tail longer than that would keep
+        // the gate shut past the point where a wake word firing as an answer
+        // ended had already been given up on.
+        assertTrue(
+            "SPEECH_TAIL_MS=$SPEECH_TAIL_MS must leave room inside $HANDOFF_GRACE_MS",
+            SPEECH_TAIL_MS * 2 < HANDOFF_GRACE_MS,
+        )
+    }
+
     private fun gateFor(voice: VoiceHandoff) = shouldListenForWakeWord(
         glassesConnected = true,
         micHeld = voice.micHeld.value,
         listenRequested = voice.pendingListen.value,
+        speaking = voice.speaking.value,
     )
 }

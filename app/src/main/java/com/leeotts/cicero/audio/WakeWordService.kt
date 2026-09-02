@@ -39,8 +39,11 @@ private const val NOTIFICATION_ID = 42
  * How long the Ask screen is given to claim the microphone after the wake word
  * fires. Past this the hand-off is assumed to have failed and listening
  * resumes, rather than leaving the wake word dead until the app is reopened.
+ *
+ * Internal so a test can hold it against [SPEECH_TAIL_MS], which has to stay
+ * comfortably under it.
  */
-private const val HANDOFF_GRACE_MS = 3_000L
+internal const val HANDOFF_GRACE_MS = 3_000L
 
 /**
  * Listens for the wake word while the glasses are connected.
@@ -103,12 +106,17 @@ class WakeWordService : Service() {
         }
 
         scope.launch {
+            // speakingWithTail holds its first emission for SPEECH_TAIL_MS, so
+            // capture starts a little after the service does. Once, and worth
+            // it: the alternative is a special case for a state that only
+            // exists before Cicero has ever spoken.
             combine(
                 Wearables.devices,
                 voice.micHeld,
                 voice.pendingListen,
-            ) { devices, micHeld, pending ->
-                shouldListenForWakeWord(devices.isNotEmpty(), micHeld, pending)
+                voice.speakingWithTail,
+            ) { devices, micHeld, pending, speaking ->
+                shouldListenForWakeWord(devices.isNotEmpty(), micHeld, pending, speaking)
             }
                 .distinctUntilChanged()
                 .collect { listen ->
