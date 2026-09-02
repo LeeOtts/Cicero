@@ -25,7 +25,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -42,9 +41,6 @@ private const val NOTIFICATION_ID = 42
  * resumes, rather than leaving the wake word dead until the app is reopened.
  */
 private const val HANDOFF_GRACE_MS = 3_000L
-
-/** Ceiling on one exchange, so a screen left open cannot silence the wake word. */
-private const val HANDOFF_TIMEOUT_MS = 120_000L
 
 /**
  * Listens for the wake word while the glasses are connected.
@@ -107,11 +103,18 @@ class WakeWordService : Service() {
         }
 
         scope.launch {
-            combine(Wearables.devices, voice.micHeld) { devices, micHeld ->
-                devices.isNotEmpty() && !micHeld
+            combine(
+                Wearables.devices,
+                voice.micHeld,
+                voice.pendingListen,
+            ) { devices, micHeld, pending ->
+                shouldListenForWakeWord(devices.isNotEmpty(), micHeld, pending)
             }
                 .distinctUntilChanged()
-                .collect { listen -> if (listen) startCapture() else stopCapture() }
+                .collect { listen ->
+                    Log.i(TAG, "WakeWordService: capture ${if (listen) "on" else "off"}")
+                    if (listen) startCapture() else stopCapture()
+                }
         }
     }
 
@@ -149,11 +152,11 @@ class WakeWordService : Service() {
         // no use now, and a stale buffer can score against fresh audio.
         detector.reset()
 
-        while (currentCoroutineContext().isActive) {
-            if (!listenUntilDetected(detector)) return
-            handOff()
-            detector.reset()
-        }
+        if (!listenUntilDetected(detector)) return
+        handOff()
+        // handOff raises the request, which shuts the gate, which cancels this
+        // job. Returning is tidier than racing that; the gate starts a fresh
+        // pass once the microphone comes back.
     }
 
     /** True when the wake word fired, false when capture was cancelled or failed. */
@@ -207,14 +210,15 @@ class WakeWordService : Service() {
     }
 
     /**
-     * Gives the microphone to the Ask screen and waits for it back.
+     * Gives the microphone to the Ask screen.
      *
-     * The order matters: the request is raised before the activity is launched,
-     * and the recorder is already released by the time this runs - a recognizer
-     * started while the service still holds the microphone hears nothing at all
-     * and reports no error.
+     * The request is raised first and on its own closes the gate, so capture
+     * stops before the activity even exists - there is no window in which both
+     * this service and the recognizer are reading the microphone. The recorder
+     * is already released by the time this runs; a recognizer started while the
+     * service still held the device hears nothing and reports no error.
      */
-    private suspend fun handOff() {
+    private fun handOff() {
         voice.requestListening()
         runCatching {
             startActivity(
@@ -224,16 +228,17 @@ class WakeWordService : Service() {
             )
         }.onFailure { Log.e(TAG, "WakeWordService: could not open Cicero", it) }
 
-        val taken = withTimeoutOrNull(HANDOFF_GRACE_MS) { voice.micHeld.first { it } } != null
-        if (!taken) {
-            // Nothing picked it up - a dismissed activity, or speech
-            // recognition unavailable. Resume rather than stay deaf.
-            voice.takeListenRequest()
-            return
+        // Launched on the service's own scope, not the capture job: the gate is
+        // about to cancel that job, and the safety net has to outlive it. Without
+        // this a hand-off nobody picks up - a dismissed activity, or speech
+        // recognition unavailable - would leave the request set and the wake word
+        // deaf until the app was reopened.
+        scope.launch {
+            val claimed = withTimeoutOrNull(HANDOFF_GRACE_MS) { voice.micHeld.first { it } } != null
+            if (claimed) return@launch
+            Log.w(TAG, "WakeWordService: nothing claimed the microphone, resuming")
+            voice.abandonListenRequest()
         }
-        withTimeoutOrNull(HANDOFF_TIMEOUT_MS) { voice.micHeld.first { !it } }
-        // Let the recognizer's own teardown finish before reopening the device.
-        delay(300)
     }
 
     private fun createChannel() {
