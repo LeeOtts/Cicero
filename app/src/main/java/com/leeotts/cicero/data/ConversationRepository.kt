@@ -29,7 +29,9 @@ class ConversationRepository(context: Context) {
      *
      * Threading rule: a turn joins the current thread if it lands within
      * [THREAD_WINDOW_MS] of the last one AND the same backend is selected.
-     * Otherwise it opens a new thread.
+     * Otherwise it opens a new thread. [forceNew] skips that check entirely,
+     * for a caller that already knows the current thread must not be reused
+     * (e.g. the user explicitly asked to start over).
      *
      * [brainId] is the provider the *user* chose, not the one that answered.
      * Those differ once per-task routing is on, and keying on the answering
@@ -37,9 +39,10 @@ class ConversationRepository(context: Context) {
      * a follow-up routed differently. Which model actually answered is recorded
      * per turn instead, on [Turn.brainId].
      */
-    suspend fun conversationFor(now: Long, brainId: String): Long {
+    suspend fun conversationFor(now: Long, brainId: String, forceNew: Boolean = false): Long {
         val latest = dao.latestConversation()
-        if (latest != null &&
+        if (!forceNew &&
+            latest != null &&
             latest.brainId == brainId &&
             now - latest.endedAt <= THREAD_WINDOW_MS
         ) {

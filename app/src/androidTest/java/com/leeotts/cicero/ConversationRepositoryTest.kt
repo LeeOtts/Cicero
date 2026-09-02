@@ -70,6 +70,19 @@ class ConversationRepositoryTest {
         assertNotEquals("a different brain should open a new thread", first, second)
     }
 
+    /** forceNew is how "New thread" refuses to land back in the old thread. */
+    @Test
+    fun forceNewStartsAThreadEvenInsideTheWindow() = runBlocking {
+        val t0 = 1_000_000_000L
+        val first = repository.conversationFor(t0, "gemini")
+        repository.addTurn(first, Role.USER, "hello", now = t0)
+
+        // One second later - well inside the five minute window.
+        val second = repository.conversationFor(t0 + 1_000, "gemini", forceNew = true)
+
+        assertNotEquals("forceNew should open a new thread regardless of timing", first, second)
+    }
+
     @Test
     fun fullTextSearchFindsPastTurns() = runBlocking {
         val t0 = 1_000_000_000L

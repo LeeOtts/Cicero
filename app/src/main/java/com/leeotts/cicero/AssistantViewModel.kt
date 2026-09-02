@@ -159,6 +159,12 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     /** In-memory history for follow-ups within the current thread. */
     private var history: List<Msg> = emptyList()
 
+    /** Which thread [history] and [_exchanges] belong to right now. */
+    private var currentConversationId: Long? = null
+
+    /** Set by [clearConversation]; consumed by the next [ask] to skip the idle window. */
+    private var forceNewThread = false
+
     fun update(transform: (BrainConfig) -> BrainConfig) {
         viewModelScope.launch { settings.update(transform) }
     }
@@ -296,14 +302,24 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
             // Once per turn: the answer, its title and any transcription all
             // read the address off this one config.
             val cfg = config.value.withResolvedLocalUrl(getApplication())
-            val routing = Router.route(cfg, question, history.size)
-            var brain = BrainFactory.brain(cfg, routing.target)
             val now = System.currentTimeMillis()
 
             // Threaded on the provider the USER chose, never the one routing
             // picked: routing changes model turn to turn, and keying on that
             // would split one conversation into a string of one-turn threads.
-            val conversationId = repository.conversationFor(now, cfg.providerId)
+            val conversationId = repository.conversationFor(now, cfg.providerId, forceNew = forceNewThread)
+            forceNewThread = false
+            if (conversationId != currentConversationId) {
+                // Either idle past THREAD_WINDOW_MS, the backend changed, or
+                // "New thread" was tapped - either way the transcript on screen
+                // belongs to a thread that is no longer the one this turn joins.
+                history = emptyList()
+                _exchanges.value = emptyList()
+            }
+            currentConversationId = conversationId
+
+            val routing = Router.route(cfg, question, history.size)
+            var brain = BrainFactory.brain(cfg, routing.target)
             val isFirstTurn = history.isEmpty()
             repository.addTurn(conversationId, Role.USER, question, now = now)
 
@@ -448,6 +464,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     fun clearConversation() {
         history = emptyList()
         _exchanges.value = emptyList()
+        forceNewThread = true
     }
 
     /**
