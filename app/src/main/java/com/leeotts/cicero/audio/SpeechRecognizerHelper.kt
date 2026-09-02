@@ -27,8 +27,15 @@ internal interface SpeechEngine {
     fun destroy()
 
     interface Listener {
-        /** The best guess so far; fires repeatedly, then once more when final. */
+        /** The best guess so far; fires repeatedly as the user speaks. */
         fun onTranscript(text: String)
+
+        /**
+         * The words the capture settled on. Fires once, and only when the
+         * recognizer produced a result - never after an error, where the last
+         * partial is all there is and nothing was decided.
+         */
+        fun onFinalTranscript(text: String)
 
         /** Terminal, whether the capture ended in a result or an error. */
         fun onFinished()
@@ -75,10 +82,18 @@ class SpeechRecognizerHelper internal constructor(private val engines: SpeechEng
      * with the final result, so the caller can simply overwrite what it holds
      * each time. Nothing is emitted at all when nothing was heard.
      *
+     * [onFinal] fires once, just after the last [onText], with the words the
+     * recognizer settled on - the caller's cue that the user has stopped
+     * speaking rather than merely paused. It is skipped when the capture ended
+     * in an error or was stopped by hand, so acting on it can never send words
+     * the user meant to take back.
+     *
      * A no-op if already listening or [available] is false - the caller is
      * expected to check [available] before offering the mic button at all.
+     *
+     * [onText] comes last so a trailing lambda still reads as the transcript.
      */
-    fun start(onText: (String) -> Unit) {
+    fun start(onFinal: (String) -> Unit = {}, onText: (String) -> Unit) {
         if (_listening.value || !available) return
         // Defensive: nothing should be left running here, and a second live
         // engine is the one thing the platform will not tolerate.
@@ -91,6 +106,14 @@ class SpeechRecognizerHelper internal constructor(private val engines: SpeechEng
         val listener = object : SpeechEngine.Listener {
             override fun onTranscript(text: String) {
                 if (current === engine) onText(text)
+            }
+
+            override fun onFinalTranscript(text: String) {
+                if (current !== engine) return
+                // Through onText as well, so the field shows the words that
+                // are about to be acted on rather than the last partial.
+                onText(text)
+                onFinal(text)
             }
 
             override fun onFinished() = release(engine)
@@ -165,7 +188,7 @@ private class AndroidSpeechEngine(context: Context) : SpeechEngine {
             }
 
             override fun onResults(results: Bundle?) {
-                best(results)?.let(listener::onTranscript)
+                best(results)?.let(listener::onFinalTranscript)
                 listener.onFinished()
             }
 

@@ -37,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,8 +84,35 @@ fun AskScreen(
     val speechAvailable = remember { recognizer.available }
 
     val micGranted = rememberSystemFlag { context.isGranted(Manifest.permission.RECORD_AUDIO) }
-    fun beginListening() {
-        recognizer.start { text -> question = text }
+
+    // Read as the capture ends rather than as it starts. A capture runs for
+    // seconds, and both of these move underneath it: a lambda holding the ones
+    // that existed at start() would send through a stale callback.
+    val currentOnAsk by rememberUpdatedState(onAsk)
+    val currentlyBusy by rememberUpdatedState(busy)
+
+    /**
+     * Opens the microphone for one question.
+     *
+     * [autoSend] belongs to the wake word alone. It fired so the phone could
+     * stay in a pocket, and a question left waiting on the send button would
+     * defeat the whole point of it. A capture the user started by tapping the
+     * mic button is theirs to edit first.
+     */
+    fun beginListening(autoSend: Boolean = false) {
+        recognizer.start(
+            onFinal = { text ->
+                question = text
+                // A question asked while the previous answer is still in flight
+                // is dropped silently by ask(). Leave it in the field to be sent
+                // by hand rather than swallowing it.
+                if (autoSend && !currentlyBusy) {
+                    currentOnAsk(text)
+                    question = ""
+                }
+            },
+            onText = { text -> question = text },
+        )
     }
     val micLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -119,7 +147,7 @@ fun AskScreen(
     LaunchedEffect(pendingListen, speechAvailable, micGranted.value) {
         if (!pendingListen || !speechAvailable || !micGranted.value) return@LaunchedEffect
         // Taken, not just read, so a recomposition cannot start a second capture.
-        if (voice.takeListenRequest()) beginListening()
+        if (voice.takeListenRequest()) beginListening(autoSend = true)
     }
 
     // Follow the conversation down as it grows, and again when the thinking

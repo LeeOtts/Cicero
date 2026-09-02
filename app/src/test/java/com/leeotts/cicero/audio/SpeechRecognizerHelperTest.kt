@@ -35,8 +35,14 @@ class SpeechRecognizerHelperTest {
             destroyed = true
         }
 
-        /** Stands in for a partial or final result arriving from the recognizer. */
+        /** Stands in for a partial result arriving from the recognizer. */
         fun say(text: String) = listener?.onTranscript(text)
+
+        /** The words the recognizer settled on, as onResults delivers them. */
+        fun sayFinal(text: String) {
+            listener?.onFinalTranscript(text)
+            listener?.onFinished()
+        }
 
         fun finish() = listener?.onFinished()
     }
@@ -226,6 +232,100 @@ class SpeechRecognizerHelperTest {
         assertTrue(engine.destroyed)
         assertFalse(helper.listening.value)
         assertNull(text)
+    }
+
+    /**
+     * The wake word's whole point: nobody is going to tap send with the phone
+     * in a pocket, so something has to say when the user stopped talking.
+     */
+    @Test
+    fun `only the words the capture settled on reach onFinal`() {
+        val engines = FakeEngines()
+        val helper = helper(engines)
+        val heard = mutableListOf<String>()
+        val sent = mutableListOf<String>()
+
+        helper.start(onFinal = { sent += it }, onText = { heard += it })
+        val engine = engines.created.single()
+        engine.say("what time")
+        engine.say("what time is")
+        engine.sayFinal("what time is it")
+
+        assertEquals(listOf("what time is it"), sent)
+        // And the field ends on the words that were sent, not the last partial.
+        assertEquals("what time is it", heard.last())
+    }
+
+    /**
+     * ERROR_NO_MATCH reads exactly like the user having said nothing. Sending
+     * whatever partial happened to be showing would put words in their mouth.
+     */
+    @Test
+    fun `a capture that ends in an error sends nothing`() {
+        val engines = FakeEngines()
+        val helper = helper(engines)
+        val sent = mutableListOf<String>()
+
+        helper.start(onFinal = { sent += it }) {}
+        val engine = engines.created.single()
+        engine.say("half a thought")
+        engine.finish()
+
+        assertTrue(sent.isEmpty())
+        assertFalse(helper.listening.value)
+    }
+
+    /**
+     * Stop has to mean stop. A recogniser keeps delivering for a moment after
+     * being told to quit, and a late final landing here would send a question
+     * the user had just taken back.
+     */
+    @Test
+    fun `a capture stopped by hand cannot send itself afterwards`() {
+        val engines = FakeEngines()
+        val helper = helper(engines)
+        val sent = mutableListOf<String>()
+
+        helper.start(onFinal = { sent += it }) {}
+        val engine = engines.created.single()
+        engine.say("remind me to call")
+        helper.cancel()
+
+        engine.sayFinal("remind me to call bob")
+
+        assertTrue(sent.isEmpty())
+    }
+
+    /** The same rule for a capture superseded by a newer one. */
+    @Test
+    fun `a superseded capture cannot send while the live one is listening`() {
+        val engines = FakeEngines()
+        val helper = helper(engines)
+        val sent = mutableListOf<String>()
+
+        helper.start(onFinal = { sent += it }) {}
+        val first = engines.created[0]
+        helper.cancel()
+
+        helper.start(onFinal = { sent += it }) {}
+        first.sayFinal("stale words")
+
+        assertTrue(sent.isEmpty())
+        assertTrue(helper.listening.value)
+    }
+
+    /** A caller that only wants dictation is not made to handle the end. */
+    @Test
+    fun `a capture started without an onFinal still transcribes and finishes`() {
+        val engines = FakeEngines()
+        val helper = helper(engines)
+        var text: String? = null
+
+        helper.start { text = it }
+        engines.created.single().sayFinal("set a timer for ten minutes")
+
+        assertEquals("set a timer for ten minutes", text)
+        assertFalse(helper.listening.value)
     }
 
     @Test

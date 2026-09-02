@@ -29,9 +29,14 @@ A2DP the two coexist. Capturing speech through the glasses themselves is still a
 separate, unbuilt problem.
 
 Either trigger lands on the Ask screen with the microphone already live: the wake word,
-or the mic button. Speech is transcribed as you speak, straight into the question field,
-where it stays editable and is never sent on your behalf. Answers come back through
-Android text-to-speech.
+or the mic button. Speech is transcribed as you speak, straight into the question field.
+What happens next depends on which one you used, because the two are asked in different
+postures. The **wake word** sends the question the moment you stop talking and reads the
+answer back through Android text-to-speech — it fired so the phone could stay in your
+pocket, and a question waiting on the send button would defeat the point. The **mic
+button** leaves the words in the field, editable, for you to send by hand; your thumb is
+already on the screen. Nothing is ever sent from a capture you stopped yourself, or from
+one the recogniser gave up on.
 
 The phrase shipping today is openWakeWord's pre-trained `hey_jarvis`, which stands in
 until a `"Hey Cicero"` model is trained — the pre-trained models are CC BY-NC-SA, and one

@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,6 +41,7 @@ import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.leeotts.cicero.AssistantViewModel
+import com.leeotts.cicero.CiceroApp
 import com.leeotts.cicero.GlassesViewModel
 import com.leeotts.cicero.MapViewModel
 import com.leeotts.cicero.NotesViewModel
@@ -96,6 +98,16 @@ fun CiceroRoot(
                 restoreState = true
             }
         }
+
+        // The wake word can fire while the app sits on any screen, and only the
+        // Ask screen claims the request. Without this the hand-off goes nowhere
+        // whenever the app was last left on Settings, the map or a thread: the
+        // service's grace period runs out and the wake word looks broken.
+        // launchSingleTop makes it a no-op when Ask is already showing.
+        val context = LocalContext.current
+        val voice = remember(context) { (context.applicationContext as CiceroApp).voice }
+        val pendingListen by voice.pendingListen.collectAsStateWithLifecycle()
+        LaunchedEffect(pendingListen) { if (pendingListen) go(Route.Ask) }
 
         Surface(Modifier.fillMaxSize()) {
             ModalNavigationDrawer(
