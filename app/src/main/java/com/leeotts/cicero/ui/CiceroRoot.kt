@@ -102,12 +102,25 @@ fun CiceroRoot(
         // The wake word can fire while the app sits on any screen, and only the
         // Ask screen claims the request. Without this the hand-off goes nowhere
         // whenever the app was last left on Settings, the map or a thread: the
-        // service's grace period runs out and the wake word looks broken.
-        // launchSingleTop makes it a no-op when Ask is already showing.
+        // service's grace period runs out against a screen that was never
+        // listening, which looks from outside like a wake word that stopped
+        // working.
+        //
+        // Only when Ask is not already showing, and that guard is not a small
+        // optimisation. go() pops up to the start destination saving state and
+        // restores it, and Ask *is* the start destination - so running it on
+        // the screen we are already on tears the composable down and builds it
+        // again. Its onDispose destroys the recogniser and drops the
+        // microphone, which the service then reopens underneath the capture
+        // that had just started. The recogniser died about 300 ms in and
+        // reported ERROR_NO_MATCH five seconds later, exactly as though nobody
+        // had spoken.
         val context = LocalContext.current
         val voice = remember(context) { (context.applicationContext as CiceroApp).voice }
         val pendingListen by voice.pendingListen.collectAsStateWithLifecycle()
-        LaunchedEffect(pendingListen) { if (pendingListen) go(Route.Ask) }
+        LaunchedEffect(pendingListen) {
+            if (pendingListen && !destination.matches(Route.Ask)) go(Route.Ask)
+        }
 
         Surface(Modifier.fillMaxSize()) {
             ModalNavigationDrawer(
